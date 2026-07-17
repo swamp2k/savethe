@@ -21,7 +21,7 @@ npm install
 npm run dev        # local dev (Vite + Worker via the Cloudflare plugin)
 ```
 
-Open http://localhost:5173, create a room, and share the `SAVE-XXXX` code.
+Open http://localhost:5173, create a room, and share the 3-character code (e.g. `PW7`).
 
 ## Scripts
 

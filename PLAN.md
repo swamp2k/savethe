@@ -129,7 +129,7 @@ in production; all scripts pass; one DO test and one protocol test exist as temp
 
 ## Milestone 1 — Rooms, identity, protocol
 
-- Room creation with codes (format `SAVE-XXXX`, unambiguous alphabet, collision-checked).
+- Room creation with codes (3 characters, unambiguous alphabet, e.g. `PW7`, collision-checked).
 - Typed discriminated-union protocol with boundary validation (e.g. zod): `room.join`,
   `room.reconnect`, plus error replies. Malformed input never throws in the DO.
 - Session identity: persistent ID in localStorage; reconnect restores the same player

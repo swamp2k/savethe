@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameConnection, type Connection } from './useGameConnection';
 import { Game } from './Game';
-import { MAX_NICKNAME } from '../shared/constants';
+import { MAX_NICKNAME, ROOM_CODE_LENGTH } from '../shared/constants';
 
 export function App() {
   const conn = useGameConnection();
@@ -53,7 +53,8 @@ function Entry({ conn }: { conn: Connection }) {
         <input
           className="field__input field__input--code"
           value={code}
-          placeholder="SAVE-K7Q2"
+          maxLength={ROOM_CODE_LENGTH}
+          placeholder="PW7"
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && canJoin) conn.joinRoom(code, trimmed);

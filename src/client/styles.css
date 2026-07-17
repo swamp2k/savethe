@@ -234,7 +234,17 @@ body {
 .hud__row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem;
+}
+
+.hud__leave {
+  margin-left: auto;
+}
+
+.btn--small {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
 }
 
 .chip {

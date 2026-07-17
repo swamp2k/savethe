@@ -9,7 +9,7 @@ import type { GameView } from '../src/shared/game';
  * Workers pool, so a fixed room code is safe.
  */
 
-const ROOM = 'SAVE-TEST1';
+const ROOM = 'TS2';
 
 interface Socket {
   ws: WebSocket;
@@ -197,12 +197,12 @@ describe('GameRoom lobby', () => {
   });
 
   it('isolates rooms with different codes', async () => {
-    await createAndJoin('Martin', 'SAVE-AAAA');
+    await createAndJoin('Martin', 'AAB');
 
-    const other = await connect('SAVE-BBBB');
+    const other = await connect('BBC');
     other.send({ type: 'room.join', mode: 'join', nickname: 'Nobody' });
     const err = await other.waitFor('error');
-    // SAVE-BBBB was never created, so joining it must fail.
+    // BBC was never created, so joining it must fail.
     if (err.type === 'error') expect(err.code).toBe('no_such_room');
   });
 });
@@ -229,13 +229,13 @@ describe('GameRoom game flow', () => {
   });
 
   it('ignores game.start from a non-host', async () => {
-    const { guest } = await twoPlayerRoom('SAVE-NOHOST');
+    const { guest } = await twoPlayerRoom('NHT');
     guest.send({ type: 'game.start' });
     // The guest is not the host, so nothing should happen. A ping still pongs
     // and the phase stays in the lobby.
     guest.send({ type: 'ping' });
     await guest.waitFor('pong');
-    const id = env.GAME_ROOM.idFromName('SAVE-NOHOST');
+    const id = env.GAME_ROOM.idFromName('NHT');
     await runInDurableObject(env.GAME_ROOM.get(id), async (_instance, state) => {
       const raw = await state.storage.sql.exec(`SELECT value FROM meta WHERE key = 'game'`).toArray();
       const game = raw.length ? JSON.parse(raw[0].value as string) : { phase: 'lobby' };
@@ -244,25 +244,25 @@ describe('GameRoom game flow', () => {
   });
 
   it('schedules an alarm once a timed phase begins', async () => {
-    const { host } = await twoPlayerRoom('SAVE-ALARM');
+    const { host } = await twoPlayerRoom('ARM');
     host.send({ type: 'game.start' });
     await host.waitForPhase('mpc_selected');
 
-    const id = env.GAME_ROOM.idFromName('SAVE-ALARM');
+    const id = env.GAME_ROOM.idFromName('ARM');
     await runInDurableObject(env.GAME_ROOM.get(id), async (_instance, state) => {
       expect(await state.storage.getAlarm()).not.toBeNull();
     });
   });
 
   it('rejects a minigame action outside an active challenge', async () => {
-    const { host } = await twoPlayerRoom('SAVE-NOCHAL');
+    const { host } = await twoPlayerRoom('NCH');
     host.send({ type: 'minigame.action', payload: { kind: 'save' } });
     const err = await host.waitFor('error');
     if (err.type === 'error') expect(err.code).toBe('bad_action');
   });
 
   it('restores the live game view on reconnect after the game has started', async () => {
-    const code = 'SAVE-RECON';
+    const code = 'RCN';
     const first = await connect(code);
     first.send({ type: 'room.join', mode: 'create', nickname: 'Solo' });
     const joined = await first.waitFor('room.joined');

@@ -17,7 +17,7 @@ export function Game({ conn, view }: { conn: Connection; view: GameView }) {
 
   return (
     <div className="game">
-      <Hud view={view} nameOf={nameOf} />
+      <Hud conn={conn} view={view} nameOf={nameOf} />
       <PhasePanel conn={conn} view={view} nameOf={nameOf} />
       {conn.status === 'reconnecting' && <p className="hint center">Reconnecting…</p>}
       {conn.error && <p className="error center">{conn.error}</p>}
@@ -25,7 +25,7 @@ export function Game({ conn, view }: { conn: Connection; view: GameView }) {
   );
 }
 
-function Hud({ view, nameOf }: { view: GameView; nameOf: (id: string | null) => string }) {
+function Hud({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf: (id: string | null) => string }) {
   const inRun = view.phase !== 'lobby';
   return (
     <div className="hud">
@@ -33,6 +33,9 @@ function Hud({ view, nameOf }: { view: GameView; nameOf: (id: string | null) => 
         <span className="chip">Room {view.code}</span>
         {inRun && <span className="chip">Round {view.round}</span>}
         {view.mpcId && <span className="chip chip--mpc">MPC: {nameOf(view.mpcId)}</span>}
+        <button className="btn btn--ghost btn--small hud__leave" onClick={conn.leave}>
+          Leave
+        </button>
       </div>
       <Shelf label="Trophy shelf" plushies={view.trophies} empty="Nothing banked yet" />
       {view.unbanked.length > 0 && <Shelf label="At risk" plushies={view.unbanked} danger />}
@@ -152,9 +155,6 @@ function Lobby({ conn, view }: { conn: Connection; view: GameView }) {
       <p className="hint center">
         {count}/{MAX_PLAYERS} players
       </p>
-      <button className="btn btn--ghost" onClick={conn.leave}>
-        Leave room
-      </button>
     </div>
   );
 }
