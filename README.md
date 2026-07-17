@@ -36,6 +36,10 @@ Open http://localhost:5173, create a room, and share the `SAVE-XXXX` code.
 
 All four of `typecheck`, `lint`, `test`, `build` must pass before any commit.
 
+For automatic deploys on push instead of running `npm run deploy` by hand, see
+**[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)** — one-time Cloudflare Workers Builds
+setup that connects the Worker to this GitHub repo.
+
 ## Status
 
 **Milestones 0–2 complete.**
