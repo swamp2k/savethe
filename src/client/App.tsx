@@ -1,25 +1,26 @@
 import { useState } from 'react';
 import { useGameConnection, type Connection } from './useGameConnection';
-import { MAX_NICKNAME, MIN_PLAYERS, MAX_PLAYERS } from '../shared/constants';
+import { Game } from './Game';
+import { MAX_NICKNAME } from '../shared/constants';
 
 export function App() {
   const conn = useGameConnection();
-  const inRoom = conn.state !== null && (conn.status === 'connected' || conn.status === 'reconnecting');
+  const inRoom = conn.view !== null && conn.status !== 'idle' && conn.status !== 'error';
 
   return (
     <div className="app">
       <header className="app__header">
         <h1 className="app__title">
-          Save The<span className="app__title-dots">...</span>
+          Save The<span className="app__title-dots">…</span>
         </h1>
-        <p className="app__tagline">Cute things in ridiculous danger.</p>
+        {!inRoom && <p className="app__tagline">Cute things in ridiculous danger.</p>}
       </header>
-      {inRoom ? <RoomView conn={conn} /> : <Lobby conn={conn} />}
+      {inRoom && conn.view ? <Game conn={conn} view={conn.view} /> : <Entry conn={conn} />}
     </div>
   );
 }
 
-function Lobby({ conn }: { conn: Connection }) {
+function Entry({ conn }: { conn: Connection }) {
   const [nickname, setNickname] = useState('');
   const [code, setCode] = useState('');
   const busy = conn.status === 'connecting' || conn.status === 'reconnecting';
@@ -63,52 +64,8 @@ function Lobby({ conn }: { conn: Connection }) {
         Join room
       </button>
 
-      {busy && <p className="hint">Connecting…</p>}
-      {conn.error && <p className="error">{conn.error}</p>}
-    </div>
-  );
-}
-
-function RoomView({ conn }: { conn: Connection }) {
-  const state = conn.state!;
-  const count = state.players.length;
-  const enough = count >= MIN_PLAYERS;
-
-  return (
-    <div className="panel">
-      <div className="room-code">
-        <span className="room-code__label">Room code</span>
-        <span className="room-code__value">{state.code}</span>
-        <button
-          className="btn btn--ghost"
-          onClick={() => navigator.clipboard?.writeText(state.code).catch(() => {})}
-        >
-          Copy
-        </button>
-      </div>
-
-      {conn.status === 'reconnecting' && <p className="hint">Reconnecting…</p>}
-
-      <ul className="roster">
-        {state.players.map((p) => (
-          <li key={p.playerId} className="roster__row">
-            <span className={`dot ${p.connected ? 'dot--on' : 'dot--off'}`} />
-            <span className="roster__name">{p.nickname}</span>
-            {conn.self?.playerId === p.playerId && <span className="roster__you">you</span>}
-          </li>
-        ))}
-      </ul>
-
-      <p className="hint">
-        {count}/{MAX_PLAYERS} players
-        {enough ? ' — enough to play once the round system lands.' : ` — waiting for at least ${MIN_PLAYERS}.`}
-      </p>
-
-      {conn.error && <p className="error">{conn.error}</p>}
-
-      <button className="btn btn--ghost" onClick={conn.leave}>
-        Leave room
-      </button>
+      {busy && <p className="hint center">Connecting…</p>}
+      {conn.error && <p className="error center">{conn.error}</p>}
     </div>
   );
 }

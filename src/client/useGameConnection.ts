@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClientMessage, RoomState, ServerMessage } from '../shared/protocol';
+import type { ClientMessage, ServerMessage } from '../shared/protocol';
+import type { GameView } from '../shared/game';
 import { generateRoomCode, normalizeRoomCode } from '../shared/room-code';
 
 export type ConnectionStatus =
@@ -17,12 +18,16 @@ export interface Self {
 
 export interface Connection {
   status: ConnectionStatus;
-  state: RoomState | null;
+  view: GameView | null;
   self: Self | null;
   error: string | null;
   createRoom: (nickname: string) => void;
   joinRoom: (code: string, nickname: string) => void;
   leave: () => void;
+  startGame: () => void;
+  voteMpc: (candidateId: string) => void;
+  voteRisk: (choice: 'bank' | 'risk') => void;
+  minigameAction: (payload: unknown) => void;
 }
 
 interface Session {
@@ -74,7 +79,7 @@ function socketUrl(code: string): string {
 
 export function useGameConnection(): Connection {
   const [status, setStatus] = useState<ConnectionStatus>('idle');
-  const [state, setState] = useState<RoomState | null>(null);
+  const [view, setView] = useState<GameView | null>(null);
   const [self, setSelf] = useState<Self | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,17 +132,17 @@ export function useGameConnection(): Connection {
       switch (message.type) {
         case 'room.joined': {
           attemptsRef.current = 0;
-          saveSession({ code: message.state.code, token: message.token });
-          // Future opens for this room should reconnect, not re-join.
-          intentRef.current = { kind: 'reconnect', code: message.state.code, token: message.token };
+          saveSession({ code: message.view.code, token: message.token });
+          intentRef.current = { kind: 'reconnect', code: message.view.code, token: message.token };
           setSelf(message.self);
-          setState(message.state);
+          setView(message.view);
           setError(null);
           setStatus('connected');
           break;
         }
-        case 'room.state':
-          setState(message.state);
+        case 'game.state':
+          setView(message.view);
+          setStatus('connected');
           break;
         case 'error':
           setError(message.message);
@@ -160,20 +165,17 @@ export function useGameConnection(): Connection {
       if (closingRef.current) return;
 
       if (event.code === 4000) {
-        // Superseded by a newer connection (opened elsewhere).
         setError('This room was opened in another window.');
         setStatus('closed');
         return;
       }
       if (event.code === 4001) {
-        // Fatal server rejection; the error message was already delivered.
-        return;
+        return; // fatal server rejection; error already delivered
       }
       if (!intentRef.current) {
         setStatus('closed');
         return;
       }
-      // Network drop: back off and retry (reconnecting via the saved token).
       const delay = Math.min(1000 * 2 ** attemptsRef.current, MAX_BACKOFF_MS);
       attemptsRef.current += 1;
       setStatus('reconnecting');
@@ -211,11 +213,16 @@ export function useGameConnection(): Connection {
     attemptsRef.current = 0;
     wsRef.current?.close();
     wsRef.current = null;
-    setState(null);
+    setView(null);
     setSelf(null);
     setError(null);
     setStatus('idle');
   }, [clearTimers]);
+
+  const startGame = useCallback(() => send({ type: 'game.start' }), [send]);
+  const voteMpc = useCallback((candidateId: string) => send({ type: 'mpc.vote', candidateId }), [send]);
+  const voteRisk = useCallback((choice: 'bank' | 'risk') => send({ type: 'risk.vote', choice }), [send]);
+  const minigameAction = useCallback((payload: unknown) => send({ type: 'minigame.action', payload }), [send]);
 
   // On mount, restore a prior session if one exists (refresh recovery).
   useEffect(() => {
@@ -232,5 +239,17 @@ export function useGameConnection(): Connection {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { status, state, self, error, createRoom, joinRoom, leave };
+  return {
+    status,
+    view,
+    self,
+    error,
+    createRoom,
+    joinRoom,
+    leave,
+    startGame,
+    voteMpc,
+    voteRisk,
+    minigameAction,
+  };
 }

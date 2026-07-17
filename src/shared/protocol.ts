@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MAX_NICKNAME } from './constants';
+import type { GameView } from './game';
 
 /**
  * The wire protocol shared by client and server.
@@ -25,34 +26,17 @@ const nickname = z
   .refine((s) => !CONTROL_CHARS.test(s), 'Invalid characters');
 
 export const ClientMessage = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('room.join'),
-    mode: z.enum(['create', 'join']),
-    nickname,
-  }),
-  z.object({
-    type: z.literal('room.reconnect'),
-    token: z.string().min(1).max(200),
-  }),
+  z.object({ type: z.literal('room.join'), mode: z.enum(['create', 'join']), nickname }),
+  z.object({ type: z.literal('room.reconnect'), token: z.string().min(1).max(200) }),
+  z.object({ type: z.literal('game.start') }),
+  z.object({ type: z.literal('mpc.vote'), candidateId: z.string().min(1).max(200) }),
+  z.object({ type: z.literal('risk.vote'), choice: z.enum(['bank', 'risk']) }),
+  // Minigame payloads are further validated against the active plugin's own
+  // schema inside the GameRoom, once the active minigame is known.
+  z.object({ type: z.literal('minigame.action'), payload: z.unknown() }),
   z.object({ type: z.literal('ping') }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
-
-export type Phase = 'lobby';
-
-export interface PlayerView {
-  playerId: string;
-  nickname: string;
-  connected: boolean;
-  seat: number;
-}
-
-export interface RoomState {
-  code: string;
-  phase: Phase;
-  players: PlayerView[];
-  maxPlayers: number;
-}
 
 export type ErrorCode =
   | 'bad_message'
@@ -63,6 +47,7 @@ export type ErrorCode =
   | 'code_taken'
   | 'unknown_session'
   | 'bad_nickname'
+  | 'bad_action'
   | 'unexpected';
 
 export type ServerMessage =
@@ -70,9 +55,9 @@ export type ServerMessage =
       type: 'room.joined';
       token: string;
       self: { playerId: string; nickname: string };
-      state: RoomState;
+      view: GameView;
     }
-  | { type: 'room.state'; state: RoomState }
+  | { type: 'game.state'; view: GameView }
   | { type: 'pong' }
   | { type: 'error'; code: ErrorCode; message: string; fatal: boolean };
 

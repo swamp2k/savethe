@@ -38,7 +38,16 @@ All four of `typecheck`, `lint`, `test`, `build` must pass before any commit.
 
 ## Status
 
-**Milestone 0 + 1 complete:** project scaffold and deploy pipeline; room codes, typed
-& validated WebSocket protocol, connection-derived identity with reconnect
-(newest-connection-wins), the lobby UI, and roster/room lifecycle with Durable Object
-alarms. Next up is Milestone 2 — the round engine (see PLAN.md).
+**Milestones 0–2 complete.**
+
+- **M0/M1:** scaffold + deploy pipeline; room codes, typed & validated WebSocket
+  protocol, connection-derived identity with reconnect (newest-connection-wins),
+  lobby UI, roster/room lifecycle on Durable Object alarms.
+- **M2:** the full round loop on a pure, deterministic engine — phase state machine,
+  MPC voting (live tallies, previous-MPC exclusion, 2-player alternation, tie-break),
+  Bank/Risk with the trophy shelf, difficulty scaling, per-player state projection,
+  and a minigame plugin contract + registry driving a placeholder "debug" minigame.
+  All deadlines run on Durable Object alarms.
+
+Next up is Milestone 3 — the Reaction Test minigame and the Hydraulic Press
+presentation (the playable vertical slice). See PLAN.md.

@@ -213,3 +213,242 @@ body {
   font-size: 0.9rem;
   margin: 0;
 }
+
+.center {
+  text-align: center;
+}
+
+/* --- Game HUD --- */
+.game {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.hud {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.hud__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.chip--mpc {
+  background: var(--accent-2);
+  color: #2a0f22;
+}
+
+.shelf {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.shelf--danger {
+  background: rgba(255, 107, 107, 0.15);
+  outline: 1px solid rgba(255, 107, 107, 0.35);
+}
+
+.shelf__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.shelf__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: 1.4rem;
+}
+
+.shelf__empty {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* --- Phase panels --- */
+.panel__title {
+  margin: 0;
+  text-align: center;
+  font-size: 1.4rem;
+}
+
+.center-panel {
+  align-items: center;
+  text-align: center;
+}
+
+.timer {
+  align-self: center;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--accent-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.timer--urgent {
+  color: var(--danger);
+  animation: pulse 0.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+.big-reveal {
+  font-size: 2rem;
+  font-weight: 800;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.big-reveal.good {
+  color: var(--ok);
+}
+
+.big-reveal.bad {
+  color: var(--danger);
+}
+
+/* --- Plushie stage --- */
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.5rem 0;
+}
+
+.stage__press {
+  font-size: 2.4rem;
+  filter: grayscale(0.2);
+}
+
+.stage__plushie {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.stage__emoji {
+  font-size: 3.5rem;
+}
+
+.stage__mood {
+  font-size: 1.6rem;
+}
+
+.stage__name {
+  font-weight: 700;
+  color: var(--accent-2);
+}
+
+/* --- Voting --- */
+.vote-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.6rem;
+}
+
+.vote-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vote-btn--mine {
+  border-color: var(--accent);
+}
+
+.vote-btn__count {
+  background: var(--accent);
+  color: #2a0f22;
+  border-radius: 999px;
+  min-width: 1.6rem;
+  text-align: center;
+  padding: 0.05rem 0.4rem;
+  font-weight: 800;
+}
+
+/* --- Actions --- */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: center;
+  width: 100%;
+}
+
+.actions__row {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.actions__row .btn {
+  flex: 1;
+}
+
+.btn--save {
+  background: linear-gradient(135deg, #4ade80, #22c55e);
+  color: #06301b;
+  font-size: 1.2rem;
+}
+
+.btn--doom {
+  background: linear-gradient(135deg, #ff6b6b, #c81e1e);
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+.btn--bank {
+  background: linear-gradient(135deg, #4ade80, #22c55e);
+  color: #06301b;
+}
+
+.btn--risk {
+  background: linear-gradient(135deg, var(--accent-2), #f59e0b);
+  color: #2a0f22;
+}
+
+.btn--chosen {
+  outline: 3px solid #fff;
+}
+
+.roster__tag {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+}

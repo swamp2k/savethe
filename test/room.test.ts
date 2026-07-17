@@ -1,6 +1,7 @@
-import { SELF } from 'cloudflare:test';
+import { SELF, env, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import type { ServerMessage } from '../src/shared/protocol';
+import type { GameView } from '../src/shared/game';
 
 /**
  * Durable Object integration tests. Each test connects real WebSockets through
@@ -14,6 +15,7 @@ interface Socket {
   ws: WebSocket;
   next: () => Promise<ServerMessage>;
   waitFor: (type: ServerMessage['type']) => Promise<ServerMessage>;
+  waitForPhase: (phase: GameView['phase']) => Promise<GameView>;
   closed: Promise<{ code: number; reason: string }>;
   send: (msg: unknown) => void;
 }
@@ -50,8 +52,16 @@ async function connect(code = ROOM): Promise<Socket> {
       if (msg.type === type) return msg;
     }
   };
+  const waitForPhase = async (phase: GameView['phase']): Promise<GameView> => {
+    for (;;) {
+      const msg = await next();
+      if ((msg.type === 'game.state' || msg.type === 'room.joined') && msg.view.phase === phase) {
+        return msg.view;
+      }
+    }
+  };
 
-  return { ws, next, waitFor, closed, send: (m) => ws.send(JSON.stringify(m)) };
+  return { ws, next, waitFor, waitForPhase, closed, send: (m) => ws.send(JSON.stringify(m)) };
 }
 
 async function createAndJoin(nickname: string, code = ROOM): Promise<{ socket: Socket; token: string; playerId: string }> {
@@ -70,10 +80,11 @@ describe('GameRoom lobby', () => {
     const joined = await socket.waitFor('room.joined');
     expect(joined.type).toBe('room.joined');
     if (joined.type === 'room.joined') {
-      expect(joined.state.code).toBe(ROOM);
-      expect(joined.state.players).toHaveLength(1);
-      expect(joined.state.players[0].nickname).toBe('Martin');
-      expect(joined.state.players[0].connected).toBe(true);
+      expect(joined.view.code).toBe(ROOM);
+      expect(joined.view.phase).toBe('lobby');
+      expect(joined.view.players).toHaveLength(1);
+      expect(joined.view.players[0].nickname).toBe('Martin');
+      expect(joined.view.players[0].connected).toBe(true);
       expect(joined.token).toBeTruthy();
     }
   });
@@ -99,18 +110,18 @@ describe('GameRoom lobby', () => {
 
     const guestJoined = await guest.waitFor('room.joined');
     if (guestJoined.type === 'room.joined') {
-      expect(guestJoined.state.players).toHaveLength(2);
+      expect(guestJoined.view.players).toHaveLength(2);
     }
 
     // The host should receive a roster update reflecting the new player. Drain
     // past the host's own single-player join broadcast.
-    let hostState = await host.waitFor('room.state');
-    while (hostState.type === 'room.state' && hostState.state.players.length < 2) {
-      hostState = await host.waitFor('room.state');
+    let hostState = await host.waitFor('game.state');
+    while (hostState.type === 'game.state' && hostState.view.players.length < 2) {
+      hostState = await host.waitFor('game.state');
     }
-    if (hostState.type === 'room.state') {
-      expect(hostState.state.players.map((p) => p.nickname).sort()).toEqual(['Balder', 'Martin']);
-      expect(hostState.state.players.every((p) => p.connected)).toBe(true);
+    if (hostState.type === 'game.state') {
+      expect(hostState.view.players.map((p) => p.nickname).sort()).toEqual(['Balder', 'Martin']);
+      expect(hostState.view.players.every((p) => p.connected)).toBe(true);
     }
   });
 
@@ -124,7 +135,7 @@ describe('GameRoom lobby', () => {
     if (rejoined.type === 'room.joined') {
       expect(rejoined.self.playerId).toBe(playerId);
       expect(rejoined.self.nickname).toBe('Martin');
-      expect(rejoined.state.players).toHaveLength(1);
+      expect(rejoined.view.players).toHaveLength(1);
     }
   });
 
@@ -193,5 +204,85 @@ describe('GameRoom lobby', () => {
     const err = await other.waitFor('error');
     // SAVE-BBBB was never created, so joining it must fail.
     if (err.type === 'error') expect(err.code).toBe('no_such_room');
+  });
+});
+
+describe('GameRoom game flow', () => {
+  async function twoPlayerRoom(code = ROOM): Promise<{ host: Socket; guest: Socket }> {
+    const { socket: host } = await createAndJoin('Martin', code);
+    const guest = await connect(code);
+    guest.send({ type: 'room.join', mode: 'join', nickname: 'Balder' });
+    await guest.waitFor('room.joined');
+    return { host, guest };
+  }
+
+  it('starts a game and broadcasts the MPC selection to everyone', async () => {
+    const { host, guest } = await twoPlayerRoom();
+    host.send({ type: 'game.start' });
+
+    const hostView = await host.waitForPhase('mpc_selected');
+    const guestView = await guest.waitForPhase('mpc_selected');
+    // 2-player: the vote is skipped and the lowest seat (the host) is MPC.
+    expect(hostView.mpcId).toBe(hostView.youId);
+    expect(guestView.mpcId).toBe(hostView.youId);
+    expect(guestView.currentPlushie).not.toBeNull();
+  });
+
+  it('ignores game.start from a non-host', async () => {
+    const { guest } = await twoPlayerRoom('SAVE-NOHOST');
+    guest.send({ type: 'game.start' });
+    // The guest is not the host, so nothing should happen. A ping still pongs
+    // and the phase stays in the lobby.
+    guest.send({ type: 'ping' });
+    await guest.waitFor('pong');
+    const id = env.GAME_ROOM.idFromName('SAVE-NOHOST');
+    await runInDurableObject(env.GAME_ROOM.get(id), async (_instance, state) => {
+      const raw = await state.storage.sql.exec(`SELECT value FROM meta WHERE key = 'game'`).toArray();
+      const game = raw.length ? JSON.parse(raw[0].value as string) : { phase: 'lobby' };
+      expect(game.phase).toBe('lobby');
+    });
+  });
+
+  it('schedules an alarm once a timed phase begins', async () => {
+    const { host } = await twoPlayerRoom('SAVE-ALARM');
+    host.send({ type: 'game.start' });
+    await host.waitForPhase('mpc_selected');
+
+    const id = env.GAME_ROOM.idFromName('SAVE-ALARM');
+    await runInDurableObject(env.GAME_ROOM.get(id), async (_instance, state) => {
+      expect(await state.storage.getAlarm()).not.toBeNull();
+    });
+  });
+
+  it('rejects a minigame action outside an active challenge', async () => {
+    const { host } = await twoPlayerRoom('SAVE-NOCHAL');
+    host.send({ type: 'minigame.action', payload: { kind: 'save' } });
+    const err = await host.waitFor('error');
+    if (err.type === 'error') expect(err.code).toBe('bad_action');
+  });
+
+  it('restores the live game view on reconnect after the game has started', async () => {
+    const code = 'SAVE-RECON';
+    const first = await connect(code);
+    first.send({ type: 'room.join', mode: 'create', nickname: 'Solo' });
+    const joined = await first.waitFor('room.joined');
+    const token = joined.type === 'room.joined' ? joined.token : '';
+
+    const second = await connect(code);
+    second.send({ type: 'room.join', mode: 'join', nickname: 'Duo' });
+    await second.waitFor('room.joined');
+
+    first.send({ type: 'game.start' });
+    await first.waitForPhase('mpc_selected');
+
+    // Reconnect the first player; the snapshot must not fall back to the lobby.
+    first.ws.close();
+    const again = await connect(code);
+    again.send({ type: 'room.reconnect', token });
+    const rejoined = await again.waitFor('room.joined');
+    if (rejoined.type === 'room.joined') {
+      expect(rejoined.view.phase).not.toBe('lobby');
+      expect(rejoined.view.mpcId).not.toBeNull();
+    }
   });
 });

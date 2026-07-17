@@ -1,14 +1,17 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './index';
-import {
-  decodeClientMessage,
-  encode,
-  type ServerMessage,
-  type RoomState,
-  type PlayerView,
-  type ErrorCode,
-} from '../shared/protocol';
+import { decodeClientMessage, encode, type ServerMessage, type ErrorCode } from '../shared/protocol';
 import { GRACE_MS, MAX_PLAYERS } from '../shared/constants';
+import {
+  initialGameState,
+  projectFor,
+  reduce,
+  type EngineAction,
+  type EnginePlayer,
+  type GameState,
+} from './engine/engine';
+import { getMinigame } from './minigames/registry';
+import type { MinigameContext } from './minigames/contract';
 
 interface PlayerRow {
   playerId: string;
@@ -29,12 +32,14 @@ interface Attachment {
 
 const SUPERSEDED = 4000;
 const FATAL = 4001;
+/** Floor for a past-due alarm so we never request a wake in the past. */
+const ALARM_FLOOR_MS = 100;
 
 /**
- * One GameRoom Durable Object per room code. Owns the roster and reconnect
- * identity for its room. SQLite-backed and hibernation-safe: nothing lives in
- * instance memory across requests — connected players are always recomputed
- * from `ctx.getWebSockets()`, and every deadline is a Durable Object alarm.
+ * One GameRoom Durable Object per room code. Owns roster + reconnect identity
+ * (SQLite) and drives the pure game engine, persisting GameState as JSON and
+ * scheduling a single alarm that covers both engine deadlines and roster
+ * cleanup. Hibernation-safe: nothing lives in instance memory across requests.
  */
 export class GameRoom extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -62,8 +67,6 @@ export class GameRoom extends DurableObject<Env> {
     const code = decodeURIComponent(url.pathname.replace(/^\/ws\//, '')).toUpperCase();
 
     const { 0: client, 1: server } = new WebSocketPair();
-    // Bind the room code to the socket before the first message so a `create`
-    // handshake survives a hibernation between accept and that message.
     server.serializeAttachment({ code } satisfies Attachment);
     this.ctx.acceptWebSocket(server);
     return new Response(null, { status: 101, webSocket: client });
@@ -71,7 +74,7 @@ export class GameRoom extends DurableObject<Env> {
 
   // --- Hibernatable WebSocket handlers ---------------------------------------
 
-  webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): void {
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const raw = typeof message === 'string' ? message : new TextDecoder().decode(message);
     const decoded = decodeClientMessage(raw);
     if (!decoded.ok) {
@@ -81,40 +84,42 @@ export class GameRoom extends DurableObject<Env> {
     const msg = decoded.value;
     const att = this.attachment(ws);
 
-    if (att?.playerId) {
-      // Already bound to a player: only gameplay messages are valid here.
-      switch (msg.type) {
-        case 'ping':
-          this.send(ws, { type: 'pong' });
-          return;
-        case 'room.join':
-        case 'room.reconnect':
-          this.send(ws, { type: 'error', code: 'already_joined', message: 'Already in this room', fatal: false });
-          return;
-      }
+    if (!att?.playerId) {
+      // Handshake phase: only join/reconnect are valid.
+      if (msg.type === 'room.join') return this.handleJoin(ws, att, msg.mode, msg.nickname);
+      if (msg.type === 'room.reconnect') return this.handleReconnect(ws, att, msg.token);
+      this.send(ws, { type: 'error', code: 'not_joined', message: 'Join the room first', fatal: false });
+      return;
     }
 
-    // Handshake phase.
+    const playerId = att.playerId;
     switch (msg.type) {
-      case 'room.join':
-        this.handleJoin(ws, att, msg.mode, msg.nickname);
-        return;
-      case 'room.reconnect':
-        this.handleReconnect(ws, att, msg.token);
-        return;
       case 'ping':
-        this.send(ws, { type: 'error', code: 'not_joined', message: 'Join the room first', fatal: false });
+        this.send(ws, { type: 'pong' });
         return;
+      case 'room.join':
+      case 'room.reconnect':
+        this.send(ws, { type: 'error', code: 'already_joined', message: 'Already in this room', fatal: false });
+        return;
+      case 'game.start':
+        return this.dispatch({ type: 'start', byPlayerId: playerId });
+      case 'mpc.vote':
+        return this.dispatch({ type: 'mpcVote', voterId: playerId, candidateId: msg.candidateId });
+      case 'risk.vote':
+        return this.dispatch({ type: 'riskVote', voterId: playerId, choice: msg.choice });
+      case 'minigame.action':
+        return this.handleMinigameAction(ws, playerId, msg.payload);
     }
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
     const att = this.attachment(ws);
-    if (att?.playerId) {
-      this.exec(`UPDATE players SET lastSeen = ? WHERE playerId = ?`, Date.now(), att.playerId);
-      this.broadcastState(ws);
-      await this.ensureAlarm();
-    }
+    if (!att?.playerId) return;
+    this.exec(`UPDATE players SET lastSeen = ? WHERE playerId = ?`, Date.now(), att.playerId);
+    // The player is now disconnected; sync the engine (may complete a vote).
+    let state = this.loadState();
+    state = reduce(state, { type: 'syncPlayers', players: this.enginePlayers(ws) }, this.now());
+    await this.commit(state);
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
@@ -123,32 +128,40 @@ export class GameRoom extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     const now = Date.now();
+
+    // 1. Drop players who have been gone longer than the grace period.
     const connected = this.connectedIds();
-    let changed = false;
     for (const p of this.players()) {
       if (!connected.has(p.playerId) && now - p.lastSeen >= GRACE_MS) {
         this.exec(`DELETE FROM players WHERE playerId = ?`, p.playerId);
-        changed = true;
       }
     }
-
-    const remaining = this.players();
-    if (remaining.length === 0) {
-      // Room is empty and past grace: reclaim it entirely.
+    if (this.players().length === 0) {
       await this.ctx.storage.deleteAll();
       return;
     }
-    if (changed) this.broadcastState();
 
-    const live = this.connectedIds();
-    if (remaining.some((p) => !live.has(p.playerId))) {
-      await this.ctx.storage.setAlarm(now + GRACE_MS);
+    // 2. Sync roster into the engine, then advance any elapsed deadlines. A
+    //    single wake may have slept past several deadlines, so loop until the
+    //    engine stops making progress or its next deadline is in the future.
+    let state = this.loadState();
+    state = reduce(state, { type: 'syncPlayers', players: this.enginePlayers() }, this.now());
+    while (state.deadline !== null && now >= state.deadline) {
+      const before = state;
+      state = reduce(state, { type: 'tick' }, this.now());
+      if (state === before) break;
     }
+    await this.commit(state);
   }
 
-  // --- Handshake handlers -----------------------------------------------------
+  // --- Handshake --------------------------------------------------------------
 
-  private handleJoin(ws: WebSocket, att: Attachment | null, mode: 'create' | 'join', nickname: string): void {
+  private async handleJoin(
+    ws: WebSocket,
+    att: Attachment | null,
+    mode: 'create' | 'join',
+    nickname: string,
+  ): Promise<void> {
     const code = att?.code ?? '';
     const initialized = this.isInitialized();
 
@@ -187,16 +200,10 @@ export class GameRoom extends DurableObject<Env> {
       player.seat,
     );
     this.bind(ws, code, player.playerId);
-    this.send(ws, {
-      type: 'room.joined',
-      token: player.token,
-      self: { playerId: player.playerId, nickname: player.nickname },
-      state: this.roomState(),
-    });
-    this.broadcastState();
+    await this.admit(ws, player.playerId, player.token, player.nickname);
   }
 
-  private handleReconnect(ws: WebSocket, att: Attachment | null, token: string): void {
+  private async handleReconnect(ws: WebSocket, att: Attachment | null, token: string): Promise<void> {
     const code = att?.code ?? '';
     if (!this.isInitialized()) {
       this.fail(ws, 'no_such_room', 'No room with that code');
@@ -222,45 +229,100 @@ export class GameRoom extends DurableObject<Env> {
 
     this.exec(`UPDATE players SET lastSeen = ? WHERE playerId = ?`, Date.now(), player.playerId);
     this.bind(ws, code, player.playerId);
-    this.send(ws, {
-      type: 'room.joined',
-      token: player.token,
-      self: { playerId: player.playerId, nickname: player.nickname },
-      state: this.roomState(),
-    });
-    this.broadcastState();
+    await this.admit(ws, player.playerId, player.token, player.nickname);
   }
 
-  // --- State & messaging ------------------------------------------------------
+  /** Sync the (re)joined player into the engine, broadcast, and send the
+   *  private room.joined handshake reply with this player's own view. */
+  private async admit(ws: WebSocket, playerId: string, token: string, nickname: string): Promise<void> {
+    let state = this.loadState();
+    state = reduce(state, { type: 'syncPlayers', players: this.enginePlayers() }, this.now());
+    await this.commit(state);
+    this.send(ws, { type: 'room.joined', token, self: { playerId, nickname }, view: projectFor(state, playerId) });
+  }
 
-  private roomState(exclude?: WebSocket): RoomState {
+  // --- Gameplay ---------------------------------------------------------------
+
+  private handleMinigameAction(ws: WebSocket, playerId: string, payload: unknown): void {
+    const state = this.loadState();
+    if (state.phase !== 'challenge_active' || !state.activeMinigameId) {
+      this.send(ws, { type: 'error', code: 'bad_action', message: 'No active challenge', fatal: false });
+      return;
+    }
+    const game = getMinigame(state.activeMinigameId);
+    if (!game) {
+      this.send(ws, { type: 'error', code: 'bad_action', message: 'Unknown challenge', fatal: false });
+      return;
+    }
+    const parsed = game.actionSchema.safeParse(payload);
+    if (!parsed.success) {
+      this.send(ws, { type: 'error', code: 'bad_action', message: 'Invalid action', fatal: false });
+      return;
+    }
+    void this.dispatch({ type: 'minigameAction', playerId, payload: parsed.data });
+  }
+
+  private async dispatch(action: EngineAction): Promise<void> {
+    const state = reduce(this.loadState(), action, this.now());
+    await this.commit(state);
+  }
+
+  // --- Commit: persist, broadcast, reschedule ---------------------------------
+
+  private async commit(state: GameState): Promise<void> {
+    this.saveState(state);
+    this.broadcast(state);
+    await this.scheduleAlarm(state);
+  }
+
+  private broadcast(state: GameState): void {
+    for (const ws of this.ctx.getWebSockets()) {
+      const playerId = this.attachment(ws)?.playerId;
+      if (!playerId) continue;
+      this.send(ws, { type: 'game.state', view: projectFor(state, playerId) });
+    }
+  }
+
+  private async scheduleAlarm(state: GameState): Promise<void> {
+    const now = Date.now();
+    let wake: number | null = null;
+    if (state.deadline !== null) wake = Math.max(state.deadline, now + ALARM_FLOOR_MS);
+
+    const cleanup = this.cleanupDeadline();
+    if (cleanup !== null) wake = wake === null ? cleanup : Math.min(wake, cleanup);
+
+    if (wake !== null) {
+      await this.ctx.storage.setAlarm(wake);
+    } else if ((await this.ctx.storage.getAlarm()) !== null) {
+      await this.ctx.storage.deleteAlarm();
+    }
+  }
+
+  /** Earliest moment a disconnected player crosses the grace threshold, or null. */
+  private cleanupDeadline(): number | null {
+    const connected = this.connectedIds();
+    let earliest: number | null = null;
+    for (const p of this.players()) {
+      if (connected.has(p.playerId)) continue;
+      earliest = earliest === null ? p.lastSeen : Math.min(earliest, p.lastSeen);
+    }
+    return earliest === null ? null : earliest + GRACE_MS;
+  }
+
+  // --- Engine glue ------------------------------------------------------------
+
+  private now(): MinigameContext {
+    return { now: Date.now(), random: Math.random };
+  }
+
+  private enginePlayers(exclude?: WebSocket): EnginePlayer[] {
     const connected = this.connectedIds(exclude);
-    const players: PlayerView[] = this.players().map((p) => ({
+    return this.players().map((p) => ({
       playerId: p.playerId,
       nickname: p.nickname,
       connected: connected.has(p.playerId),
       seat: p.seat,
     }));
-    return {
-      code: this.metaGet('code') ?? '',
-      phase: 'lobby',
-      players,
-      maxPlayers: MAX_PLAYERS,
-    };
-  }
-
-  private broadcastState(exclude?: WebSocket): void {
-    const message: ServerMessage = { type: 'room.state', state: this.roomState(exclude) };
-    const payload = encode(message);
-    for (const ws of this.ctx.getWebSockets()) {
-      if (ws === exclude) continue;
-      if (!this.attachment(ws)?.playerId) continue;
-      try {
-        ws.send(payload);
-      } catch {
-        // socket is gone; the close handler will clean it up
-      }
-    }
   }
 
   private connectedIds(exclude?: WebSocket): Set<string> {
@@ -273,6 +335,25 @@ export class GameRoom extends DurableObject<Env> {
     return ids;
   }
 
+  private loadState(): GameState {
+    const raw = this.metaGet('game');
+    let state: GameState;
+    try {
+      state = raw ? (JSON.parse(raw) as GameState) : initialGameState();
+    } catch {
+      state = initialGameState();
+    }
+    // The room code lives in meta (set at creation); surface it in the view.
+    if (!state.code) state.code = this.metaGet('code') ?? '';
+    return state;
+  }
+
+  private saveState(state: GameState): void {
+    this.metaSet('game', JSON.stringify(state));
+  }
+
+  // --- Messaging --------------------------------------------------------------
+
   private send(ws: WebSocket, message: ServerMessage): void {
     try {
       ws.send(encode(message));
@@ -281,7 +362,6 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  /** Send a fatal error, then close the socket so the client stops retrying. */
   private fail(ws: WebSocket, code: ErrorCode, message: string): void {
     this.send(ws, { type: 'error', code, message, fatal: true });
     try {
@@ -295,21 +375,14 @@ export class GameRoom extends DurableObject<Env> {
     ws.serializeAttachment({ code, playerId } satisfies Attachment);
   }
 
-  private async ensureAlarm(): Promise<void> {
-    const existing = await this.ctx.storage.getAlarm();
-    if (existing === null) {
-      await this.ctx.storage.setAlarm(Date.now() + GRACE_MS);
-    }
+  private attachment(ws: WebSocket): Attachment | null {
+    return (ws.deserializeAttachment() as Attachment | null) ?? null;
   }
 
   // --- SQLite helpers ---------------------------------------------------------
 
   private exec<T = Record<string, SqlStorageValue>>(query: string, ...bindings: SqlStorageValue[]): T[] {
     return this.ctx.storage.sql.exec<Record<string, SqlStorageValue>>(query, ...bindings).toArray() as T[];
-  }
-
-  private attachment(ws: WebSocket): Attachment | null {
-    return (ws.deserializeAttachment() as Attachment | null) ?? null;
   }
 
   private metaGet(key: string): string | null {
@@ -334,7 +407,6 @@ export class GameRoom extends DurableObject<Env> {
     this.metaSet('initialized', '1');
     this.metaSet('code', code);
     this.metaSet('createdAt', String(Date.now()));
-    this.metaSet('phase', 'lobby');
   }
 
   private players(): PlayerRow[] {
