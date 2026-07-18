@@ -70,6 +70,21 @@ const MIN_PLAUSIBLE_MS = 120;
  *  took (signal -> client -> click message -> server), plus slack for jitter. */
 const LATENCY_TOLERANCE_MS = 150;
 
+/**
+ * Flat compensation subtracted from every plausibility-checked claim before
+ * it's compared to a threshold or stored/displayed. Browsers have real,
+ * unavoidable display/compositor latency between "the code applied the new
+ * pixels" and "photons actually left the screen" that a lighter-weight
+ * native reaction tester may not carry — this credits players for that
+ * gap rather than pretending it doesn't exist. Plausibility itself (the
+ * checks above) is still validated against the raw, uncompensated claim.
+ */
+const REACTION_LATENCY_COMPENSATION_MS = 100;
+
+function compensate(elapsedMs: number): number {
+  return Math.max(0, elapsedMs - REACTION_LATENCY_COMPENSATION_MS);
+}
+
 function asState(state: unknown): ReactionState {
   return state as ReactionState;
 }
@@ -141,8 +156,9 @@ export const reactionGame: Minigame = {
 
     if (!isPlausible(a.elapsedMs, s.signalAt!, ctx.now)) return s; // ignore implausible claim
 
-    const mpc: Attempt = { elapsedMs: a.elapsedMs, falseStart: false };
-    if (a.elapsedMs <= s.mpcThresholdMs) {
+    const elapsedMs = compensate(a.elapsedMs);
+    const mpc: Attempt = { elapsedMs, falseStart: false };
+    if (elapsedMs <= s.mpcThresholdMs) {
       return { ...s, mpc, outcome: 'mpc_success' };
     }
     return startSupportWindow({ ...s, mpc }, ctx);
@@ -163,9 +179,10 @@ export const reactionGame: Minigame = {
 
     if (!isPlausible(a.elapsedMs, s.signalAt!, ctx.now)) return s; // ignore implausible claim
 
-    const attempt: Attempt = { elapsedMs: a.elapsedMs, falseStart: false };
+    const elapsedMs = compensate(a.elapsedMs);
+    const attempt: Attempt = { elapsedMs, falseStart: false };
     const supportResults = { ...s.supportResults, [playerId]: attempt };
-    if (s.savedBy === null && a.elapsedMs <= s.supportThresholdMs) {
+    if (s.savedBy === null && elapsedMs <= s.supportThresholdMs) {
       return { ...s, supportResults, savedBy: playerId, outcome: 'team_rescue' };
     }
     return { ...s, supportResults };
@@ -226,9 +243,13 @@ export const reactionGame: Minigame = {
     return s.outcome === 'pending' ? s.deadlineForStage : null;
   },
 
-  isDeadlineHidden(state: unknown): boolean {
-    const s = asState(state);
-    return s.stage === 'mpc_waiting' || s.stage === 'support_waiting';
+  isDeadlineHidden(): boolean {
+    // Every stage hides the generic numeric countdown, not just the two
+    // secret-timing ones: a ticking number on the ready-gate (an AFK
+    // safety net, unrelated to the actual random signal delay that follows
+    // it) reads as "counting down to the test," which is misleading. The
+    // client replaces it entirely with a state-driven visual signal instead.
+    return true;
   },
 
   getStateForPlayer(state: unknown, viewerId: string): unknown {

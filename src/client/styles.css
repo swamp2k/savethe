@@ -454,40 +454,86 @@ body {
   font-size: 1.2rem;
 }
 
-.reaction-target {
-  width: 100%;
-  padding: 1.4rem;
-  font-size: 1.4rem;
+/* A single persistent "traffic light" element for the Reaction Test — no
+   numeric countdown, just color and motion. One element reused across every
+   stage (see ReactionMinigameUI's SignalLight) makes a layout-shift bug
+   structurally impossible: the box never changes size, only its color,
+   label, and animation do. Sized generously for the desktop-first target. */
+.signal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.signal__light {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.5rem;
+  font-size: 1.5rem;
   font-weight: 800;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 
-.reaction-target--wait {
-  background: #4b3a6b;
-  color: var(--muted);
-  cursor: not-allowed;
+.signal__light:active {
+  transform: scale(0.97);
 }
 
-.reaction-target--ready {
-  background: linear-gradient(135deg, var(--accent), #ff8f6b);
-  color: #2a0f22;
+.signal__light--idle {
+  background: radial-gradient(circle at 35% 30%, #7a68a8, #4b3a6b 75%);
+  color: var(--text);
 }
 
-.reaction-target--go {
-  /* The go signal must be an unmistakable, instant flash — no transition on
-     background-color here, it has to snap the moment this class applies,
-     not ease in. A weak or gradual cue makes the true human reaction time
-     look artificially slow, since perceiving it takes measurably longer
-     than perceiving a sharp, high-contrast change. */
+.signal__light--armed {
+  background: radial-gradient(circle at 35% 30%, #ffc773, #d9720a 75%);
+  color: #2a1500;
+  animation: signal-pulse 1.1s ease-in-out infinite;
+}
+
+.signal__light--armed.signal__light--urgent {
+  background: radial-gradient(circle at 35% 30%, #ff9a9a, #c81e1e 75%);
+  color: #fff;
+}
+
+.signal__light--go {
+  /* Must snap instantly, no easing on the color itself — only the
+     supplementary pop/brightness flourish animates. A gradual or weak
+     go-cue makes true human reaction time look artificially slow, since
+     perceiving it takes measurably longer than perceiving a sharp,
+     high-contrast change. */
   background: var(--ok);
   color: #06301b;
-  animation: reaction-pop 0.15s ease-out;
+  animation: signal-flash 0.2s ease-out;
 }
 
-@keyframes reaction-pop {
+.signal__sublabel {
+  min-height: 1.3rem;
+}
+
+@keyframes signal-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.04);
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes signal-flash {
   from {
-    transform: scale(0.9);
-    filter: brightness(1.5);
+    transform: scale(0.88);
+    filter: brightness(1.6);
   }
   to {
     transform: scale(1);

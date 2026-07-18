@@ -29,6 +29,8 @@ function view(s: unknown, viewerId: string) {
     canClick: boolean;
     mpcThresholdMs: number;
     supportThresholdMs: number;
+    mpc: { elapsedMs: number; falseStart: boolean } | null;
+    supportResults: Record<string, { elapsedMs: number; falseStart: boolean }>;
   };
 }
 
@@ -48,24 +50,28 @@ describe('reaction test: action schema', () => {
 });
 
 describe('reaction test: arming and the go signal', () => {
-  it('starts in mpc_ready, hidden deadline off (the ready-gate itself is not a secret)', () => {
+  it('starts in mpc_ready with the generic countdown hidden', () => {
     const s = fresh();
     expect(view(s, 'mpc').stage).toBe('mpc_ready');
     expect(view(s, 'mpc').canReady).toBe(true);
-    expect(reactionGame.isDeadlineHidden!(s)).toBe(false);
+    // Every stage hides the numeric countdown now — including the ready
+    // gate, since a ticking number there would misleadingly read as "counting
+    // down to the test" when it's really just an unrelated AFK safety net.
+    // The client replaces it with a state-driven visual signal instead.
+    expect(reactionGame.isDeadlineHidden!(s)).toBe(true);
   });
 
-  it('hides the deadline while armed and waiting for the signal', () => {
+  it('stays hidden while armed and waiting for the signal', () => {
     const s = reactionGame.handleMpcAction(fresh(), { kind: 'ready' }, ctx(100));
     expect(view(s, 'mpc').stage).toBe('mpc_waiting');
     expect(reactionGame.isDeadlineHidden!(s)).toBe(true);
   });
 
-  it('flips to mpc_go (deadline visible again) once the hidden delay elapses', () => {
+  it('stays hidden once mpc_go fires too', () => {
     const [s] = toMpcGo();
     expect(view(s, 'mpc').stage).toBe('mpc_go');
     expect(view(s, 'mpc').canClick).toBe(true);
-    expect(reactionGame.isDeadlineHidden!(s)).toBe(false);
+    expect(reactionGame.isDeadlineHidden!(s)).toBe(true);
   });
 
   it('never arms without an explicit ready (ignores a stray ready in mpc_waiting)', () => {
@@ -131,6 +137,39 @@ describe('reaction test: MPC outcomes', () => {
   });
 });
 
+describe('reaction test: flat latency compensation', () => {
+  it('credits the MPC 100ms, turning a raw miss into a stored/displayed success', () => {
+    const [s, signalAt] = toMpcGo(); // difficulty 1 -> threshold 250ms
+    // Raw 300ms would fail against a 250ms threshold, but the compensated
+    // 200ms passes — and the compensated value is what gets stored/shown.
+    const clicked = reactionGame.handleMpcAction(s, { kind: 'click', elapsedMs: 300 }, ctx(signalAt + 300));
+    expect(reactionGame.evaluate(clicked, ctx(0))).toMatchObject({ status: 'resolved', success: true });
+    expect(view(clicked, 'mpc').mpc).toMatchObject({ elapsedMs: 200, falseStart: false });
+  });
+
+  it('still fails a claim that remains too slow after compensation', () => {
+    const [s, signalAt] = toMpcGo();
+    const clicked = reactionGame.handleMpcAction(s, { kind: 'click', elapsedMs: 900 }, ctx(signalAt + 900));
+    // 900 - 100 = 800, still well over the 250ms threshold.
+    expect(view(clicked, 'mpc').mpc).toMatchObject({ elapsedMs: 800 });
+    expect(view(clicked, 'mpc').stage).toBe('support_waiting');
+  });
+
+  it('validates plausibility against the raw claim, before compensation', () => {
+    const [s, signalAt] = toMpcGo();
+    // 100ms raw is below the 120ms plausibility floor; compensation must not
+    // rescue an implausible claim by being applied first.
+    const clicked = reactionGame.handleMpcAction(s, { kind: 'click', elapsedMs: 100 }, ctx(signalAt + 100));
+    expect(view(clicked, 'mpc').stage).toBe('mpc_go'); // unchanged; click was ignored
+  });
+
+  it('never produces a negative displayed value at the plausibility floor', () => {
+    const [s, signalAt] = toMpcGo();
+    const clicked = reactionGame.handleMpcAction(s, { kind: 'click', elapsedMs: 120 }, ctx(signalAt + 120));
+    expect(view(clicked, 'mpc').mpc).toMatchObject({ elapsedMs: 20 });
+  });
+});
+
 describe('reaction test: support rescue', () => {
   function toSupportGo(): [unknown, number] {
     const [afterMpcFail] = toMpcGo();
@@ -144,6 +183,14 @@ describe('reaction test: support rescue', () => {
     const [s, signalAt] = toSupportGo();
     const rescued = reactionGame.handleSupportAction(s, 's1', { kind: 'click', elapsedMs: 200 }, ctx(signalAt + 200));
     expect(reactionGame.evaluate(rescued, ctx(0))).toMatchObject({ status: 'resolved', success: true, savedBy: 's1' });
+  });
+
+  it('applies the same flat compensation to a support rescue', () => {
+    const [s, signalAt] = toSupportGo();
+    // Raw 400ms would miss the 350ms support threshold; compensated 300ms saves it.
+    const rescued = reactionGame.handleSupportAction(s, 's1', { kind: 'click', elapsedMs: 400 }, ctx(signalAt + 400));
+    expect(reactionGame.evaluate(rescued, ctx(0))).toMatchObject({ status: 'resolved', success: true, savedBy: 's1' });
+    expect(view(rescued, 's1').supportResults.s1).toMatchObject({ elapsedMs: 300, falseStart: false });
   });
 
   it('first valid rescuer wins even if a second support player also beats the threshold', () => {

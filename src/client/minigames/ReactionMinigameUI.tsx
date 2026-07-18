@@ -70,72 +70,98 @@ export const ReactionMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) 
     return <StatReveal mg={mg} view={view} nameOf={nameOf} />;
   }
 
-  const handleClick = () => {
+  const handlePress = () => {
+    if (mg.stage === 'mpc_ready') {
+      conn.minigameAction({ kind: 'ready' });
+      return;
+    }
     const elapsedMs = goAtRef.current !== null ? Date.now() - goAtRef.current : 0;
     conn.minigameAction({ kind: 'click', elapsedMs });
   };
+
+  const mpcTurn = mg.stage === 'mpc_ready' || mg.stage === 'mpc_waiting' || mg.stage === 'mpc_go';
+  const supportTurn = mg.stage === 'support_waiting' || mg.stage === 'support_go';
 
   return (
     <>
       <PlushieStage plushie={view.currentPlushie} mood={MOOD_FOR_STAGE[mg.stage]} />
 
-      {mg.role === 'mpc' && mg.stage === 'mpc_ready' && (
-        <div className="actions">
-          <p className="hint">Press ready when you&rsquo;re prepared. Then wait for it&hellip;</p>
-          <button
-            className="btn reaction-target reaction-target--ready"
-            onClick={() => conn.minigameAction({ kind: 'ready' })}
-          >
-            I&rsquo;M READY
-          </button>
-        </div>
+      {mg.role === 'mpc' && mpcTurn && (
+        <SignalLight
+          mode={mg.stage === 'mpc_ready' ? 'idle' : mg.stage === 'mpc_waiting' ? 'armed' : 'go'}
+          label={mg.stage === 'mpc_ready' ? 'PRESS WHEN READY' : mg.stage === 'mpc_waiting' ? 'WAIT FOR IT' : 'CLICK!'}
+          sublabel={mg.stage === 'mpc_ready' ? undefined : `React in ${mg.mpcThresholdMs}ms or less`}
+          onClick={handlePress}
+        />
       )}
 
-      {mg.role === 'mpc' && (mg.stage === 'mpc_waiting' || mg.stage === 'mpc_go') && (
-        <div className="actions">
-          <p className="hint">React in {mg.mpcThresholdMs}ms or less!</p>
-          <button
-            className={`btn reaction-target ${mg.stage === 'mpc_go' ? 'reaction-target--go' : 'reaction-target--wait'}`}
-            onClick={handleClick}
-          >
-            {mg.stage === 'mpc_go' ? 'CLICK!' : 'Wait for it…'}
-          </button>
-        </div>
-      )}
-
-      {mg.role === 'mpc' && (mg.stage === 'support_waiting' || mg.stage === 'support_go') && (
+      {mg.role === 'mpc' && supportTurn && (
         <p className="hint center">
           {mg.mpc?.falseStart ? 'FALSE START!' : `You reacted in ${mg.mpc?.elapsedMs}ms — too slow.`} Your team is
           trying to save it&hellip;
         </p>
       )}
 
-      {mg.role === 'support' && (mg.stage === 'mpc_ready' || mg.stage === 'mpc_waiting' || mg.stage === 'mpc_go') && (
+      {mg.role === 'support' && mpcTurn && (
         <p className="hint center">Waiting to see if {nameOf(view.mpcId)} can save it&hellip;</p>
       )}
 
-      {mg.role === 'support' &&
-        (mg.stage === 'support_waiting' || mg.stage === 'support_go') &&
-        (mg.canClick ? (
-          <div className="actions">
-            <p className="hint">EMERGENCY! React in {mg.supportThresholdMs}ms or less!</p>
-            <button
-              className={`btn btn--doom reaction-target ${mg.stage === 'support_go' ? 'reaction-target--go' : 'reaction-target--wait'}`}
-              onClick={handleClick}
-            >
-              {mg.stage === 'support_go' ? 'RESCUE!' : 'Get ready…'}
-            </button>
-          </div>
-        ) : (
-          <p className="hint center">
-            {mg.savedBy ? `Rescued by ${nameOf(mg.savedBy)}!` : 'Your shot is used. Watching the others…'}
-          </p>
-        ))}
+      {mg.role === 'support' && supportTurn && mg.canClick && (
+        <SignalLight
+          mode={mg.stage === 'support_waiting' ? 'armed' : 'go'}
+          label={mg.stage === 'support_waiting' ? 'GET READY' : 'RESCUE!'}
+          sublabel={`Emergency! React in ${mg.supportThresholdMs}ms or less`}
+          onClick={handlePress}
+          urgent
+        />
+      )}
+
+      {mg.role === 'support' && supportTurn && !mg.canClick && (
+        <p className="hint center">
+          {mg.savedBy ? `Rescued by ${nameOf(mg.savedBy)}!` : 'Your shot is used. Watching the others…'}
+        </p>
+      )}
 
       {mg.role === 'spectator' && <p className="hint center">Watching the chaos unfold&hellip;</p>}
     </>
   );
 };
+
+/**
+ * A single persistent element that just changes color/label/animation as the
+ * round progresses, rather than swapping between differently-sized buttons —
+ * that swap was the original source of a layout-shift bug (the ready button
+ * and the click target had different box sizes), and reusing one element
+ * makes the class of bug structurally impossible instead of just tuned away.
+ * No numeric countdown anywhere: idle (gray, "press when ready") -> armed
+ * (pulsing amber/red, "wait for it" — never predicts *when*) -> go (an
+ * instant, unmistakable green flash). A traffic light, not a stopwatch.
+ */
+function SignalLight({
+  mode,
+  label,
+  sublabel,
+  onClick,
+  urgent,
+}: {
+  mode: 'idle' | 'armed' | 'go';
+  label: string;
+  sublabel?: string;
+  onClick: () => void;
+  urgent?: boolean;
+}) {
+  return (
+    <div className="signal">
+      <button
+        className={`signal__light signal__light--${mode} ${urgent && mode !== 'idle' ? 'signal__light--urgent' : ''}`}
+        onClick={onClick}
+      >
+        {label}
+      </button>
+      <p className="hint signal__sublabel">{sublabel ?? ' '}</p>
+    </div>
+  );
+}
 
 function StatReveal({
   mg,

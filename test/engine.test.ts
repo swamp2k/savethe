@@ -308,19 +308,18 @@ describe('per-player projection', () => {
     expect(projectFor(s, s.mpcId!).minigame).not.toBeNull();
   });
 
-  it('exposes the ready-gate deadline (not itself a secret) for a client countdown', () => {
-    const s = toActive(started(2));
-    expect(s.deadline).toBeGreaterThan(1000);
-    expect(projectFor(s, s.mpcId!).deadline).toBe(s.deadline);
-  });
-
-  it("hides the deadline once armed, without affecting the engine's own alarm schedule", () => {
+  it("hides the deadline from players from the very start of the challenge, without affecting the engine's own alarm schedule", () => {
+    // Even the ready-gate's own countdown is hidden: a ticking number there
+    // would misleadingly read as "counting down to the test" when it's
+    // really an unrelated AFK safety net, so the Reaction Test hides its
+    // deadline throughout, not just during the secret-timing stages.
     let s = toActive(started(2));
-    s = apply(s, { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'ready' } }, 2000);
-    // The real scheduling deadline must still be set (the DO alarm depends on it)...
-    expect(s.deadline).not.toBeNull();
-    // ...but no player should be able to see it and time a click to the signal.
+    expect(s.deadline).toBeGreaterThan(1000); // the real scheduling deadline is still set
     expect(projectFor(s, s.mpcId!).deadline).toBeNull();
+
+    s = apply(s, { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'ready' } }, 2000);
+    expect(s.deadline).not.toBeNull(); // still driving the DO alarm...
+    expect(projectFor(s, s.mpcId!).deadline).toBeNull(); // ...never shown to any player
     for (const p of s.players) expect(projectFor(s, p.playerId).deadline).toBeNull();
   });
 });
