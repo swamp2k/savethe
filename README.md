@@ -42,7 +42,7 @@ setup that connects the Worker to this GitHub repo.
 
 ## Status
 
-**Milestones 0–4 built and deployed.**
+**Milestones 0–4 built and deployed. M3's human playtest gate is cleared.**
 
 - **M0/M1:** scaffold + deploy pipeline; 3-character room codes, typed & validated
   WebSocket protocol, connection-derived identity with reconnect
@@ -63,7 +63,6 @@ setup that connects the Worker to this GitHub repo.
   `engine.ts` has a zero-line diff for this entire milestone. Weighted random
   selection between both real minigames now drives the challenge reveal.
 
-**M3's exit criteria has one piece left that only a human can do: a real 3+ person
-playtest.** M4 proceeded without it (flagged, not silently skipped) — it still needs
-to happen before M5 polish work locks in a direction. See PLAN.md's Milestone 3
-section for what's built vs. still open.
+**Playtested with 2 real people** (PLAN.md originally called for 3+; the user
+confirmed 2-person testing is sufficient for their purposes) **— it worked.** Next up
+is Milestone 5: launch polish. See PLAN.md.

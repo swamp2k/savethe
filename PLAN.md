@@ -8,13 +8,12 @@ bank (safe) or risk (harder round, better reward).
 This plan is the agreed roadmap. Work top to bottom. Each milestone ends with explicit
 exit criteria — do not start the next milestone until they pass.
 
-**Status: M0–M4 built and deployed.** Scaffold, rooms/identity, the full round engine,
-Reaction Test, and Typing Challenge are all live, with weighted random selection
-between them. M3's exit criteria has one part only a human can complete — **a real
-3+ person playtest hasn't happened yet** — see the M3 section below. M4 proceeded
-without waiting on it (a deliberate, explicitly-flagged deviation from this plan's own
-stated go/no-go gate); the playtest still needs to happen before M5 polish work locks
-in a direction, so raise it before that milestone starts.
+**Status: M0–M4 built and deployed, M3 playtest gate cleared.** Scaffold,
+rooms/identity, the full round engine, Reaction Test, and Typing Challenge are all
+live, with weighted random selection between them. A real playtest happened with 2
+players (this plan originally called for 3+; the user confirmed 2-person testing is
+sufficient for their purposes and signed off) — the core loop held up and it worked.
+Go for M5.
 
 ---
 
@@ -200,8 +199,9 @@ correctly opening the support window, and a correctly-timed team rescue.
 a random silly default name only; there's no rename action yet. Small, deferred rather
 than blocking.
 
-**Still open:** the human playtest itself. Only a real group can answer "is this fun?"
-— that can't be simulated or scripted.
+**Playtest: done.** Played with 2 real people (this section originally called for 3+;
+the user confirmed 2-person testing is sufficient for their purposes and signed off).
+It worked — go for M5.
 
 ## Milestone 4 — Typing Challenge (architecture stress test)
 
