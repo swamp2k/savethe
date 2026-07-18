@@ -474,15 +474,24 @@ body {
 }
 
 .reaction-target--go {
+  /* The go signal must be an unmistakable, instant flash — no transition on
+     background-color here, it has to snap the moment this class applies,
+     not ease in. A weak or gradual cue makes the true human reaction time
+     look artificially slow, since perceiving it takes measurably longer
+     than perceiving a sharp, high-contrast change. */
+  background: var(--ok);
+  color: #06301b;
   animation: reaction-pop 0.15s ease-out;
 }
 
 @keyframes reaction-pop {
   from {
-    transform: scale(0.94);
+    transform: scale(0.9);
+    filter: brightness(1.5);
   }
   to {
     transform: scale(1);
+    filter: brightness(1);
   }
 }
 

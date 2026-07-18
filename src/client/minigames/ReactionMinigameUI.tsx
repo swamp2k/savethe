@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { PlushieStage } from '../PlushieStage';
 import type { MinigameUIProps, MinigameUIComponent } from './types';
 
@@ -38,11 +38,31 @@ export const ReactionMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) 
   // record the moment THIS browser renders the go signal, not any
   // server-provided timestamp (there isn't one — the server never reveals
   // when the signal will fire), and measure elapsed time from there.
+  //
+  // A plain `useEffect` fires after the browser paints, so timestamping there
+  // would (slightly) understate the true reaction time. A double
+  // requestAnimationFrame reliably lands right after the paint for the frame
+  // that applied this state change, which is the closest a browser lets us
+  // get to "the instant the go signal became visible."
   const goAtRef = useRef<number | null>(null);
   const stage = mg?.stage;
-  useEffect(() => {
-    goAtRef.current = stage === 'mpc_go' || stage === 'support_go' ? Date.now() : null;
-  }, [stage]);
+  const isGo = stage === 'mpc_go' || stage === 'support_go';
+  useLayoutEffect(() => {
+    if (!isGo) {
+      goAtRef.current = null;
+      return;
+    }
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        goAtRef.current = Date.now();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [isGo]);
 
   if (!mg) return null;
 
