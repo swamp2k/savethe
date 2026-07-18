@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClientMessage, ServerMessage } from '../shared/protocol';
+import type { ClientMessage, EmoteKind, ServerMessage } from '../shared/protocol';
 import type { GameView } from '../shared/game';
 import { generateRoomCode, normalizeRoomCode } from '../shared/room-code';
+
+/** A received spectator emote, kept client-side only long enough to animate
+ *  (see EMOTE_LIFETIME_MS below) — never persisted, never part of GameView. */
+export interface EmoteEvent {
+  id: number;
+  playerId: string;
+  kind: EmoteKind;
+  /** Stable per-event horizontal jitter (0-1) so a burst of the same emote
+   *  doesn't render as a single stacked icon. */
+  jitter: number;
+}
+
+const EMOTE_LIFETIME_MS = 2200;
 
 export type ConnectionStatus =
   | 'idle'
@@ -21,6 +34,7 @@ export interface Connection {
   view: GameView | null;
   self: Self | null;
   error: string | null;
+  emotes: EmoteEvent[];
   createRoom: (nickname: string) => void;
   joinRoom: (code: string, nickname: string) => void;
   leave: () => void;
@@ -28,6 +42,7 @@ export interface Connection {
   voteMpc: (candidateId: string) => void;
   voteRisk: (choice: 'bank' | 'risk') => void;
   minigameAction: (payload: unknown) => void;
+  sendEmote: (kind: EmoteKind) => void;
 }
 
 interface Session {
@@ -82,6 +97,7 @@ export function useGameConnection(): Connection {
   const [view, setView] = useState<GameView | null>(null);
   const [self, setSelf] = useState<Self | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [emotes, setEmotes] = useState<EmoteEvent[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const intentRef = useRef<Intent | null>(null);
@@ -89,6 +105,7 @@ export function useGameConnection(): Connection {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const closingRef = useRef(false);
+  const nextEmoteId = useRef(0);
 
   const send = useCallback((message: ClientMessage) => {
     const ws = wsRef.current;
@@ -144,6 +161,13 @@ export function useGameConnection(): Connection {
           setView(message.view);
           setStatus('connected');
           break;
+        case 'emote': {
+          const id = nextEmoteId.current++;
+          const event: EmoteEvent = { id, playerId: message.playerId, kind: message.kind, jitter: Math.random() };
+          setEmotes((prev) => [...prev, event]);
+          setTimeout(() => setEmotes((prev) => prev.filter((e) => e.id !== id)), EMOTE_LIFETIME_MS);
+          break;
+        }
         case 'error':
           setError(message.message);
           if (message.fatal) {
@@ -216,6 +240,7 @@ export function useGameConnection(): Connection {
     setView(null);
     setSelf(null);
     setError(null);
+    setEmotes([]);
     setStatus('idle');
   }, [clearTimers]);
 
@@ -223,6 +248,7 @@ export function useGameConnection(): Connection {
   const voteMpc = useCallback((candidateId: string) => send({ type: 'mpc.vote', candidateId }), [send]);
   const voteRisk = useCallback((choice: 'bank' | 'risk') => send({ type: 'risk.vote', choice }), [send]);
   const minigameAction = useCallback((payload: unknown) => send({ type: 'minigame.action', payload }), [send]);
+  const sendEmote = useCallback((kind: EmoteKind) => send({ type: 'emote', kind }), [send]);
 
   // On mount, restore a prior session if one exists (refresh recovery).
   useEffect(() => {
@@ -244,6 +270,7 @@ export function useGameConnection(): Connection {
     view,
     self,
     error,
+    emotes,
     createRoom,
     joinRoom,
     leave,
@@ -251,5 +278,6 @@ export function useGameConnection(): Connection {
     voteMpc,
     voteRisk,
     minigameAction,
+    sendEmote,
   };
 }

@@ -16,6 +16,10 @@ const ROOM = 'TS2';
 interface Socket {
   ws: WebSocket;
   next: () => Promise<ServerMessage>;
+  /** Non-blocking peek: whatever's already queued, or null. Useful for
+   *  proving a *negative* (nothing more arrived) without hanging a test on
+   *  a message that, if the code is correct, will never come. */
+  tryNext: () => ServerMessage | null;
   waitFor: (type: ServerMessage['type']) => Promise<ServerMessage>;
   waitForPhase: (phase: GameView['phase']) => Promise<GameView>;
   closed: Promise<{ code: number; reason: string }>;
@@ -48,6 +52,7 @@ async function connect(code = ROOM): Promise<Socket> {
     if (msg) return Promise.resolve(msg);
     return new Promise((resolve) => waiters.push(resolve));
   };
+  const tryNext = (): ServerMessage | null => queue.shift() ?? null;
   const waitFor = async (type: ServerMessage['type']): Promise<ServerMessage> => {
     for (;;) {
       const msg = await next();
@@ -63,7 +68,7 @@ async function connect(code = ROOM): Promise<Socket> {
     }
   };
 
-  return { ws, next, waitFor, waitForPhase, closed, send: (m) => ws.send(JSON.stringify(m)) };
+  return { ws, next, tryNext, waitFor, waitForPhase, closed, send: (m) => ws.send(JSON.stringify(m)) };
 }
 
 async function createAndJoin(nickname: string, code = ROOM): Promise<{ socket: Socket; token: string; playerId: string }> {
@@ -346,6 +351,75 @@ describe('GameRoom game flow', () => {
       expect(rejoined.view.phase).not.toBe('lobby');
       expect(rejoined.view.mpcId).not.toBeNull();
     }
+  });
+});
+
+describe('spectator emotes', () => {
+  async function twoPlayerRoomWithIds(
+    code: string,
+  ): Promise<{ host: Socket; guest: Socket; hostId: string; guestId: string }> {
+    const { socket: host, playerId: hostId } = await createAndJoin('Martin', code);
+    const guest = await connect(code);
+    guest.send({ type: 'room.join', mode: 'join', nickname: 'Balder' });
+    const guestJoined = await guest.waitFor('room.joined');
+    const guestId = guestJoined.type === 'room.joined' ? guestJoined.self.playerId : '';
+    // The guest joining broadcasts a roster update to the host; drain it so
+    // callers doing precise message-order assertions start from a clean queue.
+    let hostState = await host.waitFor('game.state');
+    while (hostState.type === 'game.state' && hostState.view.players.length < 2) {
+      hostState = await host.waitFor('game.state');
+    }
+    return { host, guest, hostId, guestId };
+  }
+
+  it('relays an emote to everyone (including the sender) once the run has started', async () => {
+    const { host, guest, hostId } = await twoPlayerRoomWithIds('EMO');
+    host.send({ type: 'game.start' });
+    await host.waitForPhase('mpc_selected');
+    await guest.waitForPhase('mpc_selected');
+
+    host.send({ type: 'emote', kind: 'heart' });
+
+    const hostEcho = await host.waitFor('emote');
+    const guestEcho = await guest.waitFor('emote');
+    if (hostEcho.type === 'emote') {
+      expect(hostEcho.playerId).toBe(hostId);
+      expect(hostEcho.kind).toBe('heart');
+    }
+    if (guestEcho.type === 'emote') {
+      expect(guestEcho.playerId).toBe(hostId);
+      expect(guestEcho.kind).toBe('heart');
+    }
+  });
+
+  it('drops an emote sent before the run has started (nothing to react to yet)', async () => {
+    const { host } = await twoPlayerRoomWithIds('EM2');
+    host.send({ type: 'emote', kind: 'panic' });
+    // Same connection, so message processing order is deterministic: if the
+    // emote were (incorrectly) relayed, it would be queued ahead of the pong.
+    host.send({ type: 'ping' });
+    const msg = await host.next();
+    expect(msg.type).toBe('pong');
+  });
+
+  it('throttles rapid emotes from the same player', async () => {
+    const { host, guest } = await twoPlayerRoomWithIds('EM3');
+    host.send({ type: 'game.start' });
+    await host.waitForPhase('mpc_selected');
+    await guest.waitForPhase('mpc_selected');
+
+    host.send({ type: 'emote', kind: 'tomato' });
+    host.send({ type: 'emote', kind: 'tomato' }); // within the cooldown window: dropped
+
+    const first = await guest.waitFor('emote');
+    expect(first.type).toBe('emote');
+
+    // The host's two sends and the ping below are processed strictly in
+    // order on one connection, so by the time the pong arrives, any second
+    // emote relay would already be sitting in the guest's queue.
+    host.send({ type: 'ping' });
+    await host.waitFor('pong');
+    expect(guest.tryNext()).toBeNull();
   });
 });
 

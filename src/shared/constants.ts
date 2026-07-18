@@ -24,6 +24,11 @@ export const RATE_LIMIT_MAX_MESSAGES = 30;
  *  Generous headroom over realistic friend-group usage. */
 export const MAX_ROOMS = 300;
 
+/** Minimum gap between one player's emotes, so a single mashed button can't
+ *  flood everyone's screen with floating icons. Independent of (and tighter
+ *  than) the generic per-connection message rate limit above. */
+export const EMOTE_COOLDOWN_MS = 400;
+
 /** Room code shape: 3 characters from an unambiguous alphabet (no I/L/O/0/1),
  *  e.g. "PW7". Short enough to read aloud across a room. */
 export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';

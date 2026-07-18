@@ -1,9 +1,14 @@
-import type { Connection } from './useGameConnection';
+import { useEffect, useRef } from 'react';
+import type { Connection, EmoteEvent } from './useGameConnection';
 import { MACHINES, type GameView, type Plushie } from '../shared/game';
 import { MIN_PLAYERS, MAX_PLAYERS } from '../shared/constants';
+import type { EmoteKind } from '../shared/protocol';
 import { useCountdown } from './useCountdown';
 import { PlushieShowcase } from './PlushieShowcase';
 import { getMinigameUI } from './minigames/registry';
+import { playSound, useMuted } from './sound';
+
+const EMOTE_EMOJI: Record<EmoteKind, string> = { heart: '❤️', panic: '😱', tomato: '🍅' };
 
 export function Game({ conn, view }: { conn: Connection; view: GameView }) {
   const nameOf = (id: string | null): string =>
@@ -13,6 +18,7 @@ export function Game({ conn, view }: { conn: Connection; view: GameView }) {
     <div className="game">
       <Hud conn={conn} view={view} nameOf={nameOf} />
       <PhasePanel conn={conn} view={view} nameOf={nameOf} />
+      <EmoteOverlay emotes={conn.emotes} />
       {conn.status === 'reconnecting' && <p className="hint center">Reconnecting…</p>}
       {conn.error && <p className="error center">{conn.error}</p>}
     </div>
@@ -21,6 +27,7 @@ export function Game({ conn, view }: { conn: Connection; view: GameView }) {
 
 function Hud({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf: (id: string | null) => string }) {
   const inRun = view.phase !== 'lobby';
+  const [muted, setMuted] = useMuted();
   return (
     <div className="hud">
       <div className="hud__row">
@@ -32,12 +39,59 @@ function Hud({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf:
           </span>
         )}
         {view.mpcId && <span className="chip chip--mpc">MPC: {nameOf(view.mpcId)}</span>}
+        <button
+          className="btn btn--ghost btn--small hud__mute"
+          onClick={() => setMuted(!muted)}
+          aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+          title={muted ? 'Unmute sound' : 'Mute sound'}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
         <button className="btn btn--ghost btn--small hud__leave" onClick={conn.leave}>
           Leave
         </button>
       </div>
+      {inRun && <EmoteBar conn={conn} />}
       <Shelf label="🏆 Trophy shelf" plushies={view.trophies} empty="Nothing banked yet — go rescue someone!" big />
       {view.unbanked.length > 0 && <Shelf label="😰 At risk" plushies={view.unbanked} danger />}
+    </div>
+  );
+}
+
+/** Spectator reactions — a spam-proof, low-stakes way to cheer or heckle
+ *  whoever's on the hot seat. Purely decorative: the click just fires the
+ *  emote and lets it fly (server-side per-player cooldown handles spam), no
+ *  local disabling or feedback sound needed beyond the burst itself. */
+function EmoteBar({ conn }: { conn: Connection }) {
+  return (
+    <div className="emote-bar">
+      {(Object.keys(EMOTE_EMOJI) as EmoteKind[]).map((kind) => (
+        <button
+          key={kind}
+          className="emote-bar__btn"
+          onClick={() => conn.sendEmote(kind)}
+          aria-label={`Send ${kind} emote`}
+        >
+          {EMOTE_EMOJI[kind]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Floating burst of received emotes, layered over the whole game panel
+ *  (design doc: rendered around the endangered plushie). Each entry expires
+ *  itself out of `conn.emotes` client-side (useGameConnection); this just
+ *  renders whatever's currently alive. */
+function EmoteOverlay({ emotes }: { emotes: EmoteEvent[] }) {
+  if (emotes.length === 0) return null;
+  return (
+    <div className="emote-overlay">
+      {emotes.map((e) => (
+        <span key={e.id} className="emote-overlay__item" style={{ left: `${15 + e.jitter * 70}%` }}>
+          {EMOTE_EMOJI[e.kind]}
+        </span>
+      ))}
     </div>
   );
 }
@@ -108,6 +162,16 @@ function PhasePanel({
 
 function Timer({ deadline }: { deadline: number | null }) {
   const seconds = useCountdown(deadline);
+  const lastTicked = useRef<number | null>(null);
+  useEffect(() => {
+    if (seconds !== null && seconds >= 1 && seconds <= 5 && lastTicked.current !== seconds) {
+      lastTicked.current = seconds;
+      playSound('tick');
+    } else if (seconds === null || seconds > 5) {
+      lastTicked.current = null; // fresh countdown next time it re-enters the urgent zone
+    }
+  }, [seconds]);
+
   // A null deadline here means a minigame is deliberately hiding it (e.g. the
   // Reaction Test's secret signal window) — every phase that renders a Timer
   // otherwise always has one. Reserve the same box rather than unmounting it,
@@ -143,7 +207,14 @@ function Lobby({ conn, view }: { conn: Connection; view: GameView }) {
       </ul>
 
       {isHost ? (
-        <button className="btn btn--primary" disabled={!enough} onClick={conn.startGame}>
+        <button
+          className="btn btn--primary"
+          disabled={!enough}
+          onClick={() => {
+            playSound('click');
+            conn.startGame();
+          }}
+        >
           {enough ? 'Start the run' : `Need ${MIN_PLAYERS}+ players`}
         </button>
       ) : (
@@ -179,7 +250,10 @@ function MpcVoting({
             <button
               key={id}
               className={`vote-btn ${mine ? 'vote-btn--mine' : ''}`}
-              onClick={() => conn.voteMpc(id)}
+              onClick={() => {
+                playSound('click');
+                conn.voteMpc(id);
+              }}
             >
               <span className="vote-btn__name">{nameOf(id)}</span>
               <span className="vote-btn__count">{votes}</span>
@@ -249,6 +323,13 @@ function Resolution({
   nameOf: (id: string | null) => string;
 }) {
   const outcome = view.outcome;
+  useEffect(() => {
+    if (outcome) playSound(outcome.success ? 'success' : 'failure');
+    // Mount-only: this component remounts fresh every time the phase re-enters
+    // round_resolution (a different phase renders in between each round), so
+    // an empty dep array plays the cue exactly once per round.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   if (!outcome) return null;
   const MinigameUI = view.minigame ? getMinigameUI(view.minigame.id) : undefined;
   return (
@@ -279,13 +360,19 @@ function RiskVoting({ conn, view }: { conn: Connection; view: GameView }) {
       <div className="actions__row">
         <button
           className={`btn btn--bank ${view.yourRiskVote === 'bank' ? 'btn--chosen' : ''}`}
-          onClick={() => conn.voteRisk('bank')}
+          onClick={() => {
+            playSound('click');
+            conn.voteRisk('bank');
+          }}
         >
           BANK ({view.riskTally.bank})
         </button>
         <button
           className={`btn btn--risk ${view.yourRiskVote === 'risk' ? 'btn--chosen' : ''}`}
-          onClick={() => conn.voteRisk('risk')}
+          onClick={() => {
+            playSound('click');
+            conn.voteRisk('risk');
+          }}
         >
           RISK ({view.riskTally.risk})
         </button>

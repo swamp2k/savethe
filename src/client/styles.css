@@ -347,6 +347,7 @@ h3,
 
 /* --- Game HUD --- */
 .game {
+  position: relative; /* anchors .emote-overlay */
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -365,8 +366,63 @@ h3,
   gap: 0.5rem;
 }
 
-.hud__leave {
+.hud__mute {
   margin-left: auto;
+}
+
+/* --- Spectator emotes --- */
+.emote-bar {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.emote-bar__btn {
+  border: 1px solid var(--bg-panel-edge);
+  background: var(--bg-inset);
+  border-radius: 999px;
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.emote-bar__btn:hover {
+  transform: scale(1.15);
+}
+
+.emote-bar__btn:active {
+  transform: scale(0.9);
+}
+
+.emote-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.emote-overlay__item {
+  position: absolute;
+  bottom: 10%;
+  font-size: 2rem;
+  animation: emote-float 2.2s ease-out forwards;
+}
+
+@keyframes emote-float {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translateY(-10px) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-220px) scale(1);
+    opacity: 0;
+  }
 }
 
 .btn--small {

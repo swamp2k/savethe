@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { PlushieShowcase } from '../PlushieShowcase';
+import { playSound } from '../sound';
 import type { MinigameUIProps, MinigameUIComponent } from './types';
 
 type Stage = 'mpc_ready' | 'mpc_waiting' | 'mpc_go' | 'support_waiting' | 'support_go';
@@ -73,10 +74,15 @@ export const ReactionMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) 
   const handlePress = () => {
     if (mg.stage === 'mpc_ready') {
       conn.minigameAction({ kind: 'ready' });
+      playSound('click');
       return;
     }
+    // Timing-critical: measure and dispatch before anything else (including
+    // the click sound) touches the main thread, so audio setup can't inflate
+    // the reported reaction time.
     const elapsedMs = goAtRef.current !== null ? Date.now() - goAtRef.current : 0;
     conn.minigameAction({ kind: 'click', elapsedMs });
+    playSound('click');
   };
 
   const mpcTurn = mg.stage === 'mpc_ready' || mg.stage === 'mpc_waiting' || mg.stage === 'mpc_go';

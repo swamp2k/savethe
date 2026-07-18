@@ -253,16 +253,23 @@ lowered the requirement and won the round, and the word-level visual feedback
 explanation; complete flows verified on desktop + phone; no console errors; all suites
 green.
 
-**Status:** mostly done; two items intentionally deferred (below), one gap found
-along the way and not yet closed.
+**Status:** mostly done; two items intentionally deferred (below).
 
-- Juice pass: done for transitions/countdowns/party styling (self-hosted fonts,
-  candy palette, trophy shelf as HUD centerpiece, springy animations) and further
-  extended with a 3D showcase — real GLB models with idle/dance/failure clips for 24
-  species, an emoji fallback for the rest. **Not done: sound effects and spectator
-  emotes** (hearts/panic/tomatoes) — the bullet's other two items were never built;
-  this was noticed while auditing M5 status, not part of the current work. Flagging
-  it rather than silently marking the whole bullet complete.
+- Juice pass: done, including the two pieces that were missing when this status was
+  first written (sound effects, spectator emotes — caught during an M5 audit,
+  flagged, then closed out). Transitions/countdowns/party styling (self-hosted
+  fonts, candy palette, trophy shelf as HUD centerpiece, springy animations);
+  extended with a 3D showcase (real GLB models, idle/dance/failure clips for 24
+  species, emoji fallback for the rest); four CC0 sound cues (click, success,
+  failure, a last-5-seconds countdown tick) with a persisted Hud mute toggle;
+  spectator emotes (heart/panic/tomato) as a pure ephemeral broadcast relay — never
+  touching GameState or the engine, gated to an active run, per-player cooldown on
+  top of the existing rate limiter so one mashed button can't flood the screen.
+  Verified live: sound triggers confirmed via a monkey-patched `Audio.play`, mute
+  correctly silencing one player while the other still hears cues, emote burst/
+  cooldown/expiry all confirmed via DOM assertions in a scripted two-browser
+  playtest. 126 tests passing (up from 121): protocol validation for the new
+  `emote` message, and DO-level relay/lobby-gating/cooldown coverage.
 - Stakes screen: done. A new `stakes` engine phase sits between a RISK vote and the
   next MPC vote, showing the newly-assigned plushie and the still-unbanked ones at
   risk before play resumes. Only fires for rounds reached via RISK (a run's first

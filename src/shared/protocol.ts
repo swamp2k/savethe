@@ -25,6 +25,12 @@ const nickname = z
   // reject control characters that would break rendering / spoof whitespace
   .refine((s) => !CONTROL_CHARS.test(s), 'Invalid characters');
 
+/** Spectator reactions (design doc: hearts / panic / tomatoes). Purely a
+ *  cosmetic broadcast relay — never touches GameState or the engine, so
+ *  they're not part of any minigame or phase contract. */
+export const EmoteKind = z.enum(['heart', 'panic', 'tomato']);
+export type EmoteKind = z.infer<typeof EmoteKind>;
+
 export const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('room.join'), mode: z.enum(['create', 'join']), nickname }),
   z.object({ type: z.literal('room.reconnect'), token: z.string().min(1).max(200) }),
@@ -34,6 +40,7 @@ export const ClientMessage = z.discriminatedUnion('type', [
   // Minigame payloads are further validated against the active plugin's own
   // schema inside the GameRoom, once the active minigame is known.
   z.object({ type: z.literal('minigame.action'), payload: z.unknown() }),
+  z.object({ type: z.literal('emote'), kind: EmoteKind }),
   z.object({ type: z.literal('ping') }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
@@ -59,6 +66,7 @@ export type ServerMessage =
       view: GameView;
     }
   | { type: 'game.state'; view: GameView }
+  | { type: 'emote'; playerId: string; kind: EmoteKind }
   | { type: 'pong' }
   | { type: 'error'; code: ErrorCode; message: string; fatal: boolean };
 

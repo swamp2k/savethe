@@ -1,8 +1,9 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './index';
 import type { RoomRegistry } from './RoomRegistry';
-import { decodeClientMessage, encode, type ServerMessage, type ErrorCode } from '../shared/protocol';
+import { decodeClientMessage, encode, type ServerMessage, type ErrorCode, type EmoteKind } from '../shared/protocol';
 import {
+  EMOTE_COOLDOWN_MS,
   GRACE_MS,
   MAX_MESSAGE_BYTES,
   MAX_PLAYERS,
@@ -39,6 +40,9 @@ interface Attachment {
   /** Per-connection rate-limit window state (hardening). Lives on the
    *  attachment, not an instance field, so it survives hibernation. */
   rl?: { windowStart: number; count: number; warned: boolean };
+  /** Server time of this connection's last accepted emote, for the
+   *  per-player emote cooldown. */
+  emoteAt?: number;
 }
 
 const SUPERSEDED = 4000;
@@ -126,6 +130,8 @@ export class GameRoom extends DurableObject<Env> {
         return this.dispatch({ type: 'riskVote', voterId: playerId, choice: msg.choice });
       case 'minigame.action':
         return this.handleMinigameAction(ws, playerId, msg.payload);
+      case 'emote':
+        return this.handleEmote(ws, playerId, msg.kind);
     }
   }
 
@@ -286,6 +292,25 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
     void this.dispatch({ type: 'minigameAction', playerId, payload: parsed.data });
+  }
+
+  /** Spectator emotes are a pure ephemeral broadcast relay: never persisted,
+   *  never touching GameState or the engine (there's nothing here for a pure,
+   *  deterministic reducer to own). Gated to an active run — nothing to react
+   *  to in the lobby — and throttled per-player so one mashed button can't
+   *  flood everyone's screen. */
+  private handleEmote(ws: WebSocket, playerId: string, kind: EmoteKind): void {
+    if (this.loadState().phase === 'lobby') return;
+
+    const att = this.attachment(ws) ?? { code: this.metaGet('code') ?? '' };
+    const now = Date.now();
+    if (att.emoteAt !== undefined && now - att.emoteAt < EMOTE_COOLDOWN_MS) return; // throttled, drop silently
+    ws.serializeAttachment({ ...att, emoteAt: now } satisfies Attachment);
+
+    const message: ServerMessage = { type: 'emote', playerId, kind };
+    for (const socket of this.ctx.getWebSockets()) {
+      if (this.attachment(socket)?.playerId) this.send(socket, message);
+    }
   }
 
   private async dispatch(action: EngineAction): Promise<void> {
