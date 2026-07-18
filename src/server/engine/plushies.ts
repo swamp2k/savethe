@@ -1,4 +1,5 @@
 import { RARITY_VALUES, type Plushie, type PlushieRarity } from '../../shared/game';
+import { abilityPowerForRarity, type PlushieAbility } from '../../shared/abilities';
 
 interface Species {
   species: string;
@@ -57,6 +58,12 @@ const NAMES = [
   'Professor Beans',
 ];
 
+const ABILITY_POOL: PlushieAbility[] = ['brave_heart', 'guardian', 'greedy_bastard', 'lucky_charm'];
+
+function randomAbility(random: () => number): PlushieAbility {
+  return ABILITY_POOL[Math.floor(random() * ABILITY_POOL.length)];
+}
+
 /** Deterministic when given a seeded `random` (architecture rule 2). */
 export function rarityForRound(round: number): PlushieRarity {
   if (round <= 1) return 'common';
@@ -70,5 +77,9 @@ export function makePlushie(id: string, round: number, random: () => number): Pl
   const species = SPECIES[Math.floor(random() * SPECIES.length)];
   const name = NAMES[Math.floor(random() * NAMES.length)];
   const rarity = rarityForRound(round);
-  return { id, species: species.species, emoji: species.emoji, name, rarity, value: RARITY_VALUES[rarity] };
+  const ability = randomAbility(random);
+  return {
+    id, species: species.species, emoji: species.emoji, name, rarity, value: RARITY_VALUES[rarity], ability,
+    abilityPower: abilityPowerForRarity(rarity),
+  };
 }

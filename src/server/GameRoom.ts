@@ -13,6 +13,7 @@ import {
 } from '../shared/constants';
 import {
   initialGameState,
+  normalizeGameState,
   projectFor,
   reduce,
   type EngineAction,
@@ -128,8 +129,14 @@ export class GameRoom extends DurableObject<Env> {
         return this.dispatch({ type: 'mpcVote', voterId: playerId, candidateId: msg.candidateId });
       case 'risk.vote':
         return this.dispatch({ type: 'riskVote', voterId: playerId, choice: msg.choice });
+      case 'plushie.name':
+        return this.dispatch({ type: 'namePlushie', playerId, name: msg.name });
       case 'cruelty.choose':
         return this.dispatch({ type: 'crueltyChoice', playerId, choice: msg.choice });
+      case 'cruelty.sacrifice_vote':
+        return this.dispatch({ type: 'sacrificeVote', voterId: playerId, plushieId: msg.plushieId });
+      case 'last_chance.hit':
+        return this.dispatch({ type: 'lastChanceHit', playerId, attemptId: msg.attemptId, elapsedMs: msg.elapsedMs });
       case 'minigame.action':
         return this.handleMinigameAction(ws, playerId, msg.payload);
       case 'emote':
@@ -393,7 +400,7 @@ export class GameRoom extends DurableObject<Env> {
     const raw = this.metaGet('game');
     let state: GameState;
     try {
-      state = raw ? (JSON.parse(raw) as GameState) : initialGameState();
+      state = raw ? normalizeGameState(JSON.parse(raw) as GameState) : initialGameState();
     } catch {
       state = initialGameState();
     }

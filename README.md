@@ -43,7 +43,7 @@ setup that connects the Worker to this GitHub repo.
 
 ## Status
 
-**Milestones 0-5 are complete and deployed. Phase 2 has begun.**
+**Milestones 0-5 and the first Phase 2 mechanics pass are complete locally.**
 
 - **M0/M1:** scaffold + deploy pipeline; 3-character room codes, typed and validated
   WebSocket protocol, connection-derived identity with reconnect
@@ -64,8 +64,18 @@ shelf while an unbanked run can be pushed for another rescue. The current Phase 
 direction is risk/rarity progression, social-consequence events, and further
 meta-game mechanics that make those decisions more dramatic.
 
+**Phase 2 adds attachment and drama:** every rescued plushie has a generated name,
+rarity/value, and rarity-scaled ability. The round's saver names it before Bank/Risk.
+Abilities only work while their plushie remains unbanked: Brave Heart lowers future
+difficulty, Guardian reduces cruelty odds, Greedy Bastard boosts future values, and
+Lucky Charm improves Last Chance odds. A failed rescue may open a single Last Chance
+button challenge per run; its hero earns naming rights on success. The cruelty
+registry now includes The Sacrifice, a reconnect-safe group vote between the two most
+valuable at-risk plushies.
+
 **Playtested with 2 real people** (PLAN.md originally called for 3+; the user
 confirmed 2-person testing is sufficient for their purposes) - it worked.
 
 Mobile layout polish and a custom-domain deploy are deferred deliberately, not
-forgotten. They are outside the current Phase 2 mechanics work.
+forgotten. They are outside this mechanics pass. Phase 2 changes have not yet been
+deployed or human-playtested.

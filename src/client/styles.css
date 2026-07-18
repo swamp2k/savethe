@@ -829,6 +829,18 @@ h3,
 .shelf__item--epic { border-color: #d687ff; box-shadow: 0 0 14px rgba(214, 135, 255, 0.75); }
 .shelf__item--legendary { border-color: #ffd23f; box-shadow: 0 0 18px rgba(255, 210, 63, 0.9); animation: legendary-shimmer 1.2s infinite alternate; }
 .rarity { margin: 0; font-weight: 800; text-align: center; }
+.ability-line { margin: 0; font-weight: 800; text-align: center; color: var(--accent-2); }
+.rescue-rarity { margin: 0; font-weight: 900; font-size: 1.3rem; letter-spacing: 0.06em; }
+.rescue-rarity--rare { color: #6fb7ff; }
+.rescue-rarity--epic { color: #d687ff; }
+.rescue-rarity--legendary { color: #ffd23f; animation: legendary-shimmer 1.2s infinite alternate; }
+.naming-form { display: flex; flex-direction: column; gap: 0.55rem; width: min(100%, 360px); font-weight: 800; }
+.naming-form input { padding: 0.75rem; border: 2px solid var(--accent); border-radius: var(--radius-small); background: var(--bg-inset); color: var(--text); font: inherit; text-align: center; }
+.last-chance__button { width: min(100%, 380px); min-height: 5rem; font-size: 1.5rem; animation: pulse 0.55s ease-in-out infinite; }
+.sacrifice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; width: 100%; }
+.sacrifice-card { display: flex; flex-direction: column; gap: 0.35rem; align-items: center; padding: 1rem 0.5rem; border: 2px solid var(--danger); border-radius: var(--radius-small); background: var(--bg-inset); color: var(--text); cursor: pointer; font: inherit; }
+.sacrifice-card:hover, .sacrifice-card--mine { border-color: var(--accent-2); box-shadow: 0 0 0 4px rgba(255, 210, 63, 0.15); }
+.sacrifice-card__emoji { font-size: 3rem; }
 @keyframes legendary-shimmer { to { filter: brightness(1.35); } }
 
 @keyframes bomb-rattle {

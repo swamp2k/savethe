@@ -25,6 +25,14 @@ const nickname = z
   // reject control characters that would break rendering / spoof whitespace
   .refine((s) => !CONTROL_CHARS.test(s), 'Invalid characters');
 
+export const MAX_PLUSHIE_NAME = 24;
+export const plushieName = z
+  .string()
+  .trim()
+  .min(1, 'Enter a name')
+  .max(MAX_PLUSHIE_NAME)
+  .refine((s) => !CONTROL_CHARS.test(s), 'Invalid characters');
+
 /** Spectator reactions (design doc: hearts / panic / tomatoes). Purely a
  *  cosmetic broadcast relay — never touches GameState or the engine, so
  *  they're not part of any minigame or phase contract. */
@@ -38,6 +46,9 @@ export const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('mpc.vote'), candidateId: z.string().min(1).max(200) }),
   z.object({ type: z.literal('risk.vote'), choice: z.enum(['bank', 'risk']) }),
   z.object({ type: z.literal('cruelty.choose'), choice: z.enum(['sacrifice', 'harder', 'nuts', 'teeth']) }),
+  z.object({ type: z.literal('cruelty.sacrifice_vote'), plushieId: z.string().min(1).max(200) }),
+  z.object({ type: z.literal('plushie.name'), name: plushieName }),
+  z.object({ type: z.literal('last_chance.hit'), attemptId: z.number().int().nonnegative(), elapsedMs: z.number().int().min(0).max(10_000) }),
   // Minigame payloads are further validated against the active plugin's own
   // schema inside the GameRoom, once the active minigame is known.
   z.object({ type: z.literal('minigame.action'), payload: z.unknown() }),

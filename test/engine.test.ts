@@ -88,6 +88,15 @@ function throughStakes(s: GameState): GameState {
   return s.phase === 'stakes' ? apply(s, { type: 'tick' }, s.deadline! + 1) : s;
 }
 
+/** A successful resolution now deliberately pauses for attachment: the naming
+ * beat must complete (or time out) before Bank/Risk opens. */
+function throughNaming(s: GameState): GameState {
+  expect(s.phase).toBe('round_resolution');
+  s = apply(s, { type: 'tick' }, s.deadline! + 1);
+  expect(s.phase).toBe('plushie_naming');
+  return apply(s, { type: 'namePlushie', playerId: s.namingPlayerId!, name: s.currentPlushie!.name }, s.deadline! - 1);
+}
+
 /** After an MPC miss, let the support race play out with nobody rescuing. */
 function noOneRescues(s: GameState): GameState {
   const atSupportGo = apply(s, { type: 'tick' }, s.deadline! + 1); // support_waiting -> support_go
@@ -139,7 +148,7 @@ describe('MPC selection', () => {
     s = toActive(s);
     s = mpcSucceeds(s);
     expect(s.phase).toBe('round_resolution');
-    s = apply(s, { type: 'tick' }, s.deadline! + 1); // -> risk_voting
+    s = throughNaming(s);
     expect(s.phase).toBe('risk_voting');
     s = apply(s, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 6000);
     s = apply(s, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 6000);
@@ -187,7 +196,7 @@ describe('MPC selection', () => {
     expect(s.mpcId).toBe('p2');
     s = toActive(s);
     s = mpcSucceeds(s);
-    s = apply(s, { type: 'tick' }, s.deadline! + 1); // risk_voting
+    s = throughNaming(s);
     s = apply(s, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 6000);
     s = apply(s, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 6000);
     s = apply(s, { type: 'riskVote', voterId: 'p3', choice: 'risk' }, 6000);
@@ -396,7 +405,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
 describe('bank / risk & the run', () => {
   function toRiskVote(n: number): GameState {
     let s = mpcSucceeds(toActive(started(n)));
-    s = apply(s, { type: 'tick' }, s.deadline! + 1); // -> risk_voting
+    s = throughNaming(s);
     expect(s.phase).toBe('risk_voting');
     return s;
   }
@@ -424,7 +433,9 @@ describe('bank / risk & the run', () => {
     s = apply(s, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 5000);
     s = apply(s, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 5000);
     expect(s.round).toBe(2);
-    expect(s.difficulty).toBe(2);
+    // The deterministic first plushie receives Brave Heart, so its active
+    // unbanked ability cancels one point of round-two difficulty.
+    expect(s.difficulty).toBe(1);
     // The first plushie is still unbanked and now at risk.
     expect(s.unbanked).toHaveLength(1);
   });
@@ -439,7 +450,7 @@ describe('bank / risk & the run', () => {
   it('a failed round loses the unbanked collection and ends the run', () => {
     let s = mpcSucceeds(toActive(started(2)));
     // RISK once so there is something to lose, then fail the next round.
-    s = apply(s, { type: 'tick' }, s.deadline! + 1);
+    s = throughNaming(s);
     s = apply(s, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 4000);
     s = apply(s, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 4000);
     s = toActive(s);
@@ -463,7 +474,7 @@ describe('stakes screen', () => {
 
   it('shows a stakes beat before a round reached via RISK, carrying the unbanked plushies', () => {
     let s = mpcSucceeds(toActive(started(2)));
-    s = apply(s, { type: 'tick' }, s.deadline! + 1); // -> risk_voting
+    s = throughNaming(s);
     s = apply(s, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 5000);
     s = apply(s, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 5000);
     expect(s.phase).toBe('stakes');
@@ -485,7 +496,7 @@ describe('destruction machine', () => {
     expect(cannon.machine).toBe('cannon');
 
     let run = mpcSucceeds(toActive(press));
-    run = apply(run, { type: 'tick' }, run.deadline! + 1); // -> risk_voting
+    run = throughNaming(run);
     run = apply(run, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 5000);
     run = apply(run, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 5000);
     expect(run.machine).toBe('press'); // unchanged mid-run

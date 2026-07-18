@@ -9,9 +9,11 @@ export type Phase =
   | 'challenge_intro'
   | 'challenge_active'
   | 'round_resolution'
+  | 'plushie_naming'
   | 'risk_voting'
   | 'cruelty_event'
   | 'stakes'
+  | 'last_chance'
   | 'run_complete'
   | 'run_failed';
 
@@ -37,6 +39,8 @@ export interface Plushie {
   name: string;
   rarity: PlushieRarity;
   value: number;
+  ability: import('./abilities').PlushieAbility;
+  abilityPower: number;
 }
 
 export interface PlayerView {
@@ -65,9 +69,21 @@ export interface RunSummary {
   plushies: Plushie[];
 }
 
-export type CrueltyKind = 'the_deal' | 'nuts_or_teeth';
-export interface CrueltyState { kind: CrueltyKind; chooserId: string; hostagePlushieId?: string; }
+export type CrueltyKind = 'the_deal' | 'nuts_or_teeth' | 'the_sacrifice';
+export type CrueltyView =
+  | { kind: 'the_deal'; chooserId: string; hostagePlushieId: string }
+  | { kind: 'nuts_or_teeth'; chooserId: string }
+  | {
+      kind: 'the_sacrifice';
+      stage: 'voting' | 'resolved';
+      candidateIds: [string, string];
+      voteTally: Record<string, number>;
+      yourVote: string | null;
+      sacrificedPlushieId?: string;
+      sacrificedPlushie?: Plushie;
+    };
 export interface RoundModifiers { difficultyBonus: number; forcedMpcId: string | null; disableSupport: boolean; }
+export interface LastChanceView { playerId: string; attemptId: number; windowMs: number; }
 
 /**
  * Everything one specific viewer is allowed to see. Different players can get
@@ -106,11 +122,13 @@ export interface GameView {
   currentPlushie: Plushie | null;
   unbanked: Plushie[];
   trophies: Plushie[];
+  namingPlayerId: string | null;
 
   // Bank / Risk
   riskTally: { bank: number; risk: number };
   yourRiskVote: 'bank' | 'risk' | null;
-  cruelty: CrueltyState | null;
+  cruelty: CrueltyView | null;
+  lastChance: LastChanceView | null;
 
   // Active challenge (per-player projection from the plugin)
   minigame: { id: string; title: string; view: unknown } | null;
@@ -126,9 +144,11 @@ export const PHASE_LABELS: Record<Phase, string> = {
   challenge_intro: 'Challenge incoming',
   challenge_active: 'Save it!',
   round_resolution: 'Resolution',
+  plushie_naming: 'Name your rescue',
   risk_voting: 'Bank or Risk?',
   cruelty_event: 'The machine demands a choice',
   stakes: 'Stakes',
+  last_chance: 'Last Chance',
   run_complete: 'Run banked',
   run_failed: 'Run over',
 };

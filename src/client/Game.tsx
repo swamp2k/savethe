@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Connection, EmoteEvent } from './useGameConnection';
 import { MACHINES, type GameView, type Plushie } from '../shared/game';
+import { ABILITIES } from '../shared/abilities';
 import { MIN_PLAYERS, MAX_PLAYERS } from '../shared/constants';
 import type { EmoteKind } from '../shared/protocol';
 import { useCountdown } from './useCountdown';
@@ -164,12 +165,16 @@ function PhasePanel({
       return <Challenge conn={conn} view={view} nameOf={nameOf} />;
     case 'round_resolution':
       return <Resolution conn={conn} view={view} nameOf={nameOf} />;
+    case 'plushie_naming':
+      return <PlushieNaming conn={conn} view={view} nameOf={nameOf} />;
     case 'risk_voting':
       return <RiskVoting conn={conn} view={view} />;
     case 'cruelty_event':
       return <CrueltyEventPanel conn={conn} view={view} nameOf={nameOf} />;
     case 'stakes':
       return <Stakes view={view} />;
+    case 'last_chance':
+      return <LastChance conn={conn} view={view} nameOf={nameOf} />;
     case 'run_complete':
     case 'run_failed':
       return <RunOver view={view} />;
@@ -179,8 +184,14 @@ function PhasePanel({
 function CrueltyEventPanel({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf: (id: string | null) => string }) {
   const event = view.cruelty;
   if (!event) return null;
+  if (event.kind === 'the_sacrifice') {
+    const candidates = event.candidateIds.map((id) => view.unbanked.find((plushie) => plushie.id === id)).filter((plushie): plushie is Plushie => plushie !== undefined);
+    const victim = event.sacrificedPlushie ?? null;
+    if (event.stage === 'resolved') return <div className="panel center-panel cruelty-panel"><Timer remainingMs={view.deadlineRemainingMs} /><h2 className="panel__title">YOU CHOSE POORLY.</h2>{victim ? <PlushieShowcase plushie={victim} mood="😵" animation="gesture-negative" machine={view.machine} /> : <p className="big-reveal bad">The sacrifice is complete.</p>}<p className="hint center">{victim ? `${victim.name} has been sacrificed.` : 'The machine has taken its tribute.'}</p></div>;
+    return <div className="panel center-panel cruelty-panel"><Timer remainingMs={view.deadlineRemainingMs} /><h2 className="panel__title">THE SACRIFICE</h2><p className="hint center">The machine demands one. Vote for the plushie that does not leave.</p><div className="sacrifice-grid">{candidates.map((plushie) => <button key={plushie.id} className={`sacrifice-card ${event.yourVote === plushie.id ? 'sacrifice-card--mine' : ''}`} onClick={() => conn.voteSacrifice(plushie.id)}><span className="sacrifice-card__emoji">{plushie.emoji}</span><strong>{plushie.name}</strong><span>{plushie.rarity.toUpperCase()} · {plushie.value}★</span><span>{abilityLabel(plushie)}</span><span className="vote-btn__count">{event.voteTally[plushie.id] ?? 0} votes</span><span>SACRIFICE</span></button>)}</div></div>;
+  }
   const chooser = event.chooserId === view.youId;
-  const hostage = view.unbanked.find((p) => p.id === event.hostagePlushieId);
+  const hostage = event.kind === 'the_deal' ? view.unbanked.find((p) => p.id === event.hostagePlushieId) : undefined;
   return <div className="panel center-panel cruelty-panel">
     <Timer remainingMs={view.deadlineRemainingMs} />
     <h2 className="panel__title">{event.kind === 'the_deal' ? 'THE DEAL' : `BAD NEWS, ${nameOf(event.chooserId)}.`}</h2>
@@ -188,6 +199,36 @@ function CrueltyEventPanel({ conn, view, nameOf }: { conn: Connection; view: Gam
     <p className="hint center">{chooser ? 'Choose your pain.' : `Waiting for ${nameOf(event.chooserId)} to choose...`}</p>
     {event.kind === 'the_deal' ? <div className="actions__row"><button className="btn btn--bank" disabled={!chooser} onClick={() => conn.chooseCruelty('sacrifice')}>SACRIFICE IT</button><button className="btn btn--risk" disabled={!chooser} onClick={() => conn.chooseCruelty('harder')}>MAKE IT HARDER (+2)</button></div> : <div className="actions__row"><button className="btn btn--risk" disabled={!chooser} onClick={() => conn.chooseCruelty('nuts')}>NUTS: I am MPC (+1)</button><button className="btn btn--bank" disabled={!chooser} onClick={() => conn.chooseCruelty('teeth')}>TEETH: no support</button></div>}
   </div>;
+}
+
+function PlushieNaming({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf: (id: string | null) => string }) {
+  const plushie = view.outcome?.plushie ?? view.currentPlushie;
+  const [name, setName] = useState(plushie?.name ?? '');
+  const yours = view.namingPlayerId === view.youId;
+  if (!plushie) return null;
+  return <div className="panel center-panel naming-panel"><Timer remainingMs={view.deadlineRemainingMs} /><p className={`rescue-rarity rescue-rarity--${plushie.rarity}`}>{plushie.rarity.toUpperCase()} RESCUE · +{plushie.value}★</p><PlushieShowcase plushie={plushie} mood="🥳" animation="dance" machine={view.machine} /><p className="ability-line">{abilityLabel(plushie)}</p>{yours ? <form className="naming-form" onSubmit={(event) => { event.preventDefault(); conn.namePlushie(name); }}><label htmlFor="plushie-name">Name your rescue</label><input id="plushie-name" value={name} maxLength={24} onChange={(event) => setName(event.target.value)} /><button className="btn btn--primary" disabled={!name.trim()} type="submit">KEEP / SAVE NAME</button></form> : <p className="hint center">{nameOf(view.namingPlayerId)} is naming the rescue…</p>}</div>;
+}
+
+function LastChance({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf: (id: string | null) => string }) {
+  const lastChance = view.lastChance;
+  const attemptId = lastChance?.attemptId;
+  const shownAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    shownAtRef.current = null;
+    if (attemptId === undefined) return;
+    let second: number | null = null;
+    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => { shownAtRef.current = performance.now(); }); });
+    return () => { cancelAnimationFrame(first); if (second !== null) cancelAnimationFrame(second); };
+  }, [attemptId]);
+  if (!lastChance || !view.currentPlushie) return null;
+  const yours = lastChance.playerId === view.youId;
+  return <div className="panel center-panel last-chance"><Timer remainingMs={view.deadlineRemainingMs} /><h2 className="panel__title">⚠️ LAST CHANCE ⚠️</h2><p className="big-reveal bad">{view.currentPlushie.name} ISN'T GONE YET.</p><PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" machine={view.machine} />{yours ? <button className="btn btn--doom last-chance__button" onClick={() => { if (shownAtRef.current !== null) conn.hitLastChance(lastChance.attemptId, Math.round(performance.now() - shownAtRef.current)); }}>SAVE {view.currentPlushie.name.toUpperCase()}!</button> : <p className="hint center">{nameOf(lastChance.playerId)} — HIT IT!</p>}</div>;
+}
+
+function abilityLabel(plushie: Plushie): string {
+  const ability = ABILITIES[plushie.ability];
+  const power = ['', 'I', 'II', 'III'][plushie.abilityPower] ?? `Power ${plushie.abilityPower}`;
+  return `${ability.emoji} ${ability.label} ${power}`;
 }
 
 function Timer({ remainingMs }: { remainingMs: number | null }) {

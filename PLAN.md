@@ -299,6 +299,20 @@ explicitly deferred by the user rather than blocking M5; see below.
 
 ## Phase 2 backlog
 
+### Completed first mechanics pass
+
+- Plushie attachment: successful rescues enter a timed naming phase before
+  Bank/Risk; the MPC normally names the plushie, while a Last Chance hero earns
+  naming rights. Names are validated and reconnect-safe.
+- Abilities: every plushie has an ability and rarity-scaled power. Effects derive
+  exclusively from the unbanked collection, so banking, loss, The Deal, and The
+  Sacrifice automatically deactivate them.
+- Last Chance: one possible latency-tolerant SAVE-button rescue per run, with a
+  selected connected hero, reconnect-safe attempt state, and no recursive retry.
+- The Sacrifice: the cruelty registry now selects eligible events; this event makes
+  every connected player vote between the two highest-value at-risk plushies and
+  only projects tallies plus the viewer's own vote.
+
 The core loop is proven fun (M3's playtest gate) and M5 is done, so this backlog is
 now open — the design doc's warning against building systems before the social
 experience is fun no longer applies; that gate already passed.

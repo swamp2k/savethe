@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Plushie } from '../shared/game';
+import { ABILITIES } from '../shared/abilities';
 import { modelFor } from './models';
 
 /**
@@ -69,9 +70,15 @@ export function PlushieInspector({ plushie, onClose }: { plushie: Plushie; onClo
         <div className="inspector__name">
           {plushie.emoji} {plushie.name}
         </div>
+        <p className="ability-line">{ABILITIES[plushie.ability].emoji} {ABILITIES[plushie.ability].label} {powerLabel(plushie.abilityPower)}</p>
+        <p className="hint center">{ABILITIES[plushie.ability].description}</p>
         <p className={`rarity rarity--${plushie.rarity}`}>{plushie.rarity.toUpperCase()} · {plushie.value}★</p>
         <p className="hint center">Drag to spin · scroll to zoom</p>
       </div>
     </div>
   );
+}
+
+function powerLabel(power: number): string {
+  return ['', 'I', 'II', 'III'][power] ?? `Power ${power}`;
 }
