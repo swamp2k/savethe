@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-/** Seconds remaining until `deadline` (ms since epoch), or null if untimed.
- *  Ticks a few times a second so the UI counts down smoothly. */
-export function useCountdown(deadline: number | null): number | null {
-  const [now, setNow] = useState(() => Date.now());
+/** Seconds remaining from a server-projected duration. `performance.now()` is
+ * monotonic, so a device wall-clock change cannot freeze or extend the timer. */
+export function useCountdown(remainingMs: number | null): number | null {
+  const deadlineRef = useRef<number | null>(null);
+  const [now, setNow] = useState(() => performance.now());
 
   useEffect(() => {
-    if (deadline === null) return;
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 250);
+    deadlineRef.current = remainingMs === null ? null : performance.now() + remainingMs;
+    setNow(performance.now());
+    if (remainingMs === null) return;
+    const id = setInterval(() => setNow(performance.now()), 250);
     return () => clearInterval(id);
-  }, [deadline]);
+  }, [remainingMs]);
 
-  if (deadline === null) return null;
-  return Math.max(0, Math.ceil((deadline - now) / 1000));
+  if (deadlineRef.current === null) return null;
+  return Math.max(0, Math.ceil((deadlineRef.current - now) / 1000));
 }

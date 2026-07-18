@@ -10,6 +10,7 @@ export type Phase =
   | 'challenge_active'
   | 'round_resolution'
   | 'risk_voting'
+  | 'cruelty_event'
   | 'stakes'
   | 'run_complete'
   | 'run_failed';
@@ -24,11 +25,18 @@ export const MACHINES: Record<Machine, { emoji: string; label: string; failEmoji
   cannon: { emoji: '🚀', label: 'the Cannon Into Space', failEmoji: '🌌' },
 };
 
+export type PlushieRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+export const RARITY_VALUES: Record<PlushieRarity, number> = {
+  common: 1, uncommon: 2, rare: 4, epic: 8, legendary: 16,
+};
+
 export interface Plushie {
   id: string;
   species: string;
   emoji: string;
   name: string;
+  rarity: PlushieRarity;
+  value: number;
 }
 
 export interface PlayerView {
@@ -57,6 +65,10 @@ export interface RunSummary {
   plushies: Plushie[];
 }
 
+export type CrueltyKind = 'the_deal' | 'nuts_or_teeth';
+export interface CrueltyState { kind: CrueltyKind; chooserId: string; hostagePlushieId?: string; }
+export interface RoundModifiers { difficultyBonus: number; forcedMpcId: string | null; disableSupport: boolean; }
+
 /**
  * Everything one specific viewer is allowed to see. Different players can get
  * different views (per-player projection, architecture rule 4) — notably the
@@ -73,13 +85,13 @@ export interface GameView {
   hostId: string | null;
   players: PlayerView[];
 
-  /** Milliseconds since epoch when the current phase auto-advances, if timed. */
-  deadline: number | null;
+  /** Duration remaining when this projection was made, if the phase is timed. */
+  deadlineRemainingMs: number | null;
 
   /** Burning-fuse pressure bar for the active challenge: the minigame's fixed
    *  overall budget (never the jittery/secret per-action deadlines). Null
    *  whenever the active minigame has no stable, player-visible budget. */
-  fuse: { deadlineAt: number; totalMs: number } | null;
+  fuse: { remainingMs: number; totalMs: number } | null;
 
   // MPC selection
   mpcId: string | null;
@@ -98,6 +110,7 @@ export interface GameView {
   // Bank / Risk
   riskTally: { bank: number; risk: number };
   yourRiskVote: 'bank' | 'risk' | null;
+  cruelty: CrueltyState | null;
 
   // Active challenge (per-player projection from the plugin)
   minigame: { id: string; title: string; view: unknown } | null;
@@ -114,6 +127,7 @@ export const PHASE_LABELS: Record<Phase, string> = {
   challenge_active: 'Save it!',
   round_resolution: 'Resolution',
   risk_voting: 'Bank or Risk?',
+  cruelty_event: 'The machine demands a choice',
   stakes: 'Stakes',
   run_complete: 'Run banked',
   run_failed: 'Run over',

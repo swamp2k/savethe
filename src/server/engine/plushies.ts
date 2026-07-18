@@ -1,4 +1,4 @@
-import type { Plushie } from '../../shared/game';
+import { RARITY_VALUES, type Plushie, type PlushieRarity } from '../../shared/game';
 
 interface Species {
   species: string;
@@ -58,8 +58,17 @@ const NAMES = [
 ];
 
 /** Deterministic when given a seeded `random` (architecture rule 2). */
-export function makePlushie(id: string, random: () => number): Plushie {
+export function rarityForRound(round: number): PlushieRarity {
+  if (round <= 1) return 'common';
+  if (round === 2) return 'uncommon';
+  if (round === 3) return 'rare';
+  if (round === 4) return 'epic';
+  return 'legendary';
+}
+
+export function makePlushie(id: string, round: number, random: () => number): Plushie {
   const species = SPECIES[Math.floor(random() * SPECIES.length)];
   const name = NAMES[Math.floor(random() * NAMES.length)];
-  return { id, species: species.species, emoji: species.emoji, name };
+  const rarity = rarityForRound(round);
+  return { id, species: species.species, emoji: species.emoji, name, rarity, value: RARITY_VALUES[rarity] };
 }

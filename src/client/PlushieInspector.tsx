@@ -69,6 +69,7 @@ export function PlushieInspector({ plushie, onClose }: { plushie: Plushie; onClo
         <div className="inspector__name">
           {plushie.emoji} {plushie.name}
         </div>
+        <p className={`rarity rarity--${plushie.rarity}`}>{plushie.rarity.toUpperCase()} · {plushie.value}★</p>
         <p className="hint center">Drag to spin · scroll to zoom</p>
       </div>
     </div>

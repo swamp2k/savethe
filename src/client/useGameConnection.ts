@@ -41,6 +41,7 @@ export interface Connection {
   startGame: () => void;
   voteMpc: (candidateId: string) => void;
   voteRisk: (choice: 'bank' | 'risk') => void;
+  chooseCruelty: (choice: 'sacrifice' | 'harder' | 'nuts' | 'teeth') => void;
   minigameAction: (payload: unknown) => void;
   sendEmote: (kind: EmoteKind) => void;
 }
@@ -247,6 +248,7 @@ export function useGameConnection(): Connection {
   const startGame = useCallback(() => send({ type: 'game.start' }), [send]);
   const voteMpc = useCallback((candidateId: string) => send({ type: 'mpc.vote', candidateId }), [send]);
   const voteRisk = useCallback((choice: 'bank' | 'risk') => send({ type: 'risk.vote', choice }), [send]);
+  const chooseCruelty = useCallback((choice: 'sacrifice' | 'harder' | 'nuts' | 'teeth') => send({ type: 'cruelty.choose', choice }), [send]);
   const minigameAction = useCallback((payload: unknown) => send({ type: 'minigame.action', payload }), [send]);
   const sendEmote = useCallback((kind: EmoteKind) => send({ type: 'emote', kind }), [send]);
 
@@ -277,6 +279,7 @@ export function useGameConnection(): Connection {
     startGame,
     voteMpc,
     voteRisk,
+    chooseCruelty,
     minigameAction,
     sendEmote,
   };

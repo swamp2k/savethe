@@ -1,4 +1,4 @@
-import type { GameView, Machine, Phase, Plushie, PlayerView, RoundOutcome, RunSummary } from '../../shared/game';
+import type { CrueltyState, GameView, Machine, Phase, Plushie, PlayerView, RoundOutcome, RoundModifiers, RunSummary } from '../../shared/game';
 import { MIN_PLAYERS } from '../../shared/constants';
 import type { MinigameContext, MinigameOutcome } from '../minigames/contract';
 import { getMinigame, pickMinigame } from '../minigames/registry';
@@ -39,6 +39,8 @@ export interface GameState {
   unbanked: Plushie[];
   trophies: Plushie[];
   riskVotes: Record<string, 'bank' | 'risk'>;
+  cruelty: CrueltyState | null;
+  roundModifiers: RoundModifiers;
   activeMinigameId: string | null;
   minigameState: unknown;
   outcome: RoundOutcome | null;
@@ -50,6 +52,7 @@ export type EngineAction =
   | { type: 'start'; byPlayerId: string }
   | { type: 'mpcVote'; voterId: string; candidateId: string }
   | { type: 'riskVote'; voterId: string; choice: 'bank' | 'risk' }
+  | { type: 'crueltyChoice'; playerId: string; choice: 'sacrifice' | 'harder' | 'nuts' | 'teeth' }
   | { type: 'minigameAction'; playerId: string; payload: unknown }
   | { type: 'tick' };
 
@@ -60,6 +63,7 @@ export const DURATIONS = {
   resolution: 6_000,
   riskVote: 30_000,
   stakes: 6_000,
+  cruelty: 20_000,
   runEnd: 8_000,
 } as const;
 
@@ -81,6 +85,8 @@ export function initialGameState(): GameState {
     unbanked: [],
     trophies: [],
     riskVotes: {},
+    cruelty: null,
+    roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false },
     activeMinigameId: null,
     minigameState: null,
     outcome: null,
@@ -100,6 +106,8 @@ export function reduce(state: GameState, action: EngineAction, ctx: MinigameCont
       return applyMpcVote(state, action.voterId, action.candidateId, ctx);
     case 'riskVote':
       return applyRiskVote(state, action.voterId, action.choice, ctx);
+    case 'crueltyChoice':
+      return applyCrueltyChoice(state, action.playerId, action.choice, ctx);
     case 'minigameAction':
       return applyMinigameAction(state, action.playerId, action.payload, ctx);
     case 'tick':
@@ -163,6 +171,8 @@ function beginRun(state: GameState, ctx: MinigameContext): GameState {
     mpcId: null,
     mpcVotes: {},
     riskVotes: {},
+    cruelty: null,
+    roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false },
     outcome: null,
     runSummary: null,
   };
@@ -181,8 +191,8 @@ function setupRound(state: GameState, ctx: MinigameContext): GameState {
   return {
     ...state,
     round,
-    difficulty: round,
-    currentPlushie: makePlushie(`${state.runId}-${round}`, ctx.random),
+    difficulty: round + state.roundModifiers.difficultyBonus,
+    currentPlushie: makePlushie(`${state.runId}-${round}`, round, ctx.random),
     mpcId: null,
     mpcVotes: {},
     riskVotes: {},
@@ -197,6 +207,9 @@ function enterStakes(state: GameState, ctx: MinigameContext): GameState {
 }
 
 function enterMpcVoting(state: GameState, ctx: MinigameContext): GameState {
+  if (state.roundModifiers.forcedMpcId && connectedPlayers(state).some((p) => p.playerId === state.roundModifiers.forcedMpcId)) {
+    return enterMpcSelected({ ...state, mpcId: state.roundModifiers.forcedMpcId, mpcVotes: {} }, ctx);
+  }
   const eligible = eligibleCandidates(state);
   // With two or fewer players (or a single eligible candidate), a vote is
   // meaningless: skip it and auto-alternate the MPC by seat (decision 6).
@@ -231,7 +244,7 @@ function enterChallengeIntro(state: GameState, ctx: MinigameContext): GameState 
   const game = pickMinigame(ctx.random);
   const mpcId = state.mpcId;
   if (!mpcId) return state;
-  const supportIds = connectedPlayers(state)
+  const supportIds = state.roundModifiers.disableSupport ? [] : connectedPlayers(state)
     .map((p) => p.playerId)
     .filter((id) => id !== mpcId);
   const minigameState = game.createInitialState({ difficulty: state.difficulty, mpcId, supportIds }, ctx);
@@ -240,6 +253,7 @@ function enterChallengeIntro(state: GameState, ctx: MinigameContext): GameState 
     phase: 'challenge_intro',
     activeMinigameId: game.id,
     minigameState,
+    roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false },
     deadline: ctx.now + DURATIONS.challengeIntro,
   };
 }
@@ -312,7 +326,7 @@ function enterResolution(state: GameState, outcome: MinigameOutcome & { status: 
     headline: outcome.headline,
     mpcId,
     savedBy: outcome.savedBy,
-    plushie: plushie ?? { id: '', species: '', emoji: '❓', name: 'Unknown' },
+    plushie: plushie ?? { id: '', species: '', emoji: '❓', name: 'Unknown', rarity: 'common', value: 1 },
   };
   const unbanked = outcome.success && plushie ? [...state.unbanked, plushie] : state.unbanked;
   return {
@@ -352,8 +366,37 @@ function resolveRiskVote(state: GameState, ctx: MinigameContext): GameState {
     else bank += 1;
   }
   // RISK needs a strict majority of votes cast; tie or all-abstain -> BANK.
-  if (risk > bank) return enterStakes(setupRound(state, ctx), ctx);
+  if (risk > bank) return maybeEnterCruelty(state, ctx);
   return enterRunComplete(state, ctx);
+}
+
+function maybeEnterCruelty(state: GameState, ctx: MinigameContext): GameState {
+  const chance = state.round >= 4 ? 0.65 : 0.25 + state.round * 0.1;
+  // High random values trigger: this keeps the existing deterministic test
+  // context (`random() === 0`) on the ordinary RISK path while preserving the
+  // specified probability distribution for injected uniform RNGs.
+  if (ctx.random() <= 1 - chance) return enterStakes(setupRound(state, ctx), ctx);
+  const players = connectedPlayers(state).filter((p) => p.playerId !== state.previousMpcId);
+  const chooser = (players.length ? players : connectedPlayers(state))[Math.floor(ctx.random() * (players.length || connectedPlayers(state).length))];
+  if (!chooser) return enterStakes(setupRound(state, ctx), ctx);
+  const kind = ctx.random() < 0.5 ? 'the_deal' : 'nuts_or_teeth';
+  const hostage = [...state.unbanked].sort((a, b) => b.value - a.value)[0];
+  return { ...state, phase: 'cruelty_event', cruelty: { kind, chooserId: chooser.playerId, hostagePlushieId: hostage?.id }, deadline: ctx.now + DURATIONS.cruelty };
+}
+
+function applyCrueltyChoice(state: GameState, playerId: string, choice: 'sacrifice' | 'harder' | 'nuts' | 'teeth', ctx: MinigameContext): GameState {
+  if (state.phase !== 'cruelty_event' || state.cruelty?.chooserId !== playerId) return state;
+  const event = state.cruelty;
+  if (event.kind === 'the_deal' && (choice === 'sacrifice' || choice === 'harder')) {
+    const unbanked = choice === 'sacrifice' ? state.unbanked.filter((p) => p.id !== event.hostagePlushieId) : state.unbanked;
+    const roundModifiers = choice === 'harder' ? { ...state.roundModifiers, difficultyBonus: state.roundModifiers.difficultyBonus + 2 } : state.roundModifiers;
+    return enterStakes(setupRound({ ...state, unbanked, roundModifiers, cruelty: null }, ctx), ctx);
+  }
+  if (event.kind === 'nuts_or_teeth' && (choice === 'nuts' || choice === 'teeth')) {
+    const roundModifiers = choice === 'nuts' ? { ...state.roundModifiers, forcedMpcId: playerId, difficultyBonus: state.roundModifiers.difficultyBonus + 1 } : { ...state.roundModifiers, disableSupport: true };
+    return enterStakes(setupRound({ ...state, roundModifiers, cruelty: null }, ctx), ctx);
+  }
+  return state;
 }
 
 function enterRunComplete(state: GameState, ctx: MinigameContext): GameState {
@@ -398,6 +441,8 @@ function applyTick(state: GameState, ctx: MinigameContext): GameState {
       return state.outcome?.success ? enterRiskVoting(state, ctx) : enterRunFailed(state, ctx);
     case 'risk_voting':
       return resolveRiskVote(state, ctx);
+    case 'cruelty_event':
+      return applyCrueltyChoice(state, state.cruelty?.chooserId ?? '', state.cruelty?.kind === 'the_deal' ? 'harder' : 'teeth', ctx);
     case 'stakes':
       return enterMpcVoting(state, ctx);
     case 'run_complete':
@@ -410,7 +455,7 @@ function applyTick(state: GameState, ctx: MinigameContext): GameState {
 
 // --- Per-player projection ---------------------------------------------------
 
-export function projectFor(state: GameState, viewerId: string): GameView {
+export function projectFor(state: GameState, viewerId: string, now = 0): GameView {
   const game = state.activeMinigameId ? getMinigame(state.activeMinigameId) : undefined;
   const showMinigame =
     game != null &&
@@ -426,10 +471,11 @@ export function projectFor(state: GameState, viewerId: string): GameView {
 
   // The burning-fuse pressure bar: only while the challenge is live, and only
   // for minigames that expose a stable, non-secret overall budget.
-  const fuse =
+  const rawFuse =
     state.phase === 'challenge_active' && game != null
       ? (game.getFuse?.(state.minigameState) ?? null)
       : null;
+  const fuse = rawFuse ? { remainingMs: Math.max(0, rawFuse.deadlineAt - now), totalMs: rawFuse.totalMs } : null;
 
   const mpcVoteTally: Record<string, number> = {};
   for (const candidateId of Object.values(state.mpcVotes)) {
@@ -456,7 +502,7 @@ export function projectFor(state: GameState, viewerId: string): GameView {
     youId: viewerId,
     hostId: state.hostId,
     players,
-    deadline: hideDeadline ? null : state.deadline,
+    deadlineRemainingMs: hideDeadline || state.deadline === null ? null : Math.max(0, state.deadline - now),
     fuse,
     mpcId: state.mpcId,
     previousMpcId: state.previousMpcId,
@@ -468,6 +514,7 @@ export function projectFor(state: GameState, viewerId: string): GameView {
     trophies: state.trophies,
     riskTally: { bank, risk },
     yourRiskVote: state.riskVotes[viewerId] ?? null,
+    cruelty: state.cruelty,
     minigame:
       showMinigame && game
         ? { id: game.id, title: game.title, view: game.getStateForPlayer(state.minigameState, viewerId) }

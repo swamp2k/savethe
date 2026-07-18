@@ -128,6 +128,8 @@ export class GameRoom extends DurableObject<Env> {
         return this.dispatch({ type: 'mpcVote', voterId: playerId, candidateId: msg.candidateId });
       case 'risk.vote':
         return this.dispatch({ type: 'riskVote', voterId: playerId, choice: msg.choice });
+      case 'cruelty.choose':
+        return this.dispatch({ type: 'crueltyChoice', playerId, choice: msg.choice });
       case 'minigame.action':
         return this.handleMinigameAction(ws, playerId, msg.payload);
       case 'emote':
@@ -270,7 +272,7 @@ export class GameRoom extends DurableObject<Env> {
     let state = this.loadState();
     state = reduce(state, { type: 'syncPlayers', players: this.enginePlayers() }, this.now());
     await this.commit(state);
-    this.send(ws, { type: 'room.joined', token, self: { playerId, nickname }, view: projectFor(state, playerId) });
+    this.send(ws, { type: 'room.joined', token, self: { playerId, nickname }, view: projectFor(state, playerId, Date.now()) });
   }
 
   // --- Gameplay ---------------------------------------------------------------
@@ -327,10 +329,11 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private broadcast(state: GameState): void {
+    const now = Date.now();
     for (const ws of this.ctx.getWebSockets()) {
       const playerId = this.attachment(ws)?.playerId;
       if (!playerId) continue;
-      this.send(ws, { type: 'game.state', view: projectFor(state, playerId) });
+      this.send(ws, { type: 'game.state', view: projectFor(state, playerId, now) });
     }
   }
 

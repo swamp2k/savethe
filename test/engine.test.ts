@@ -236,12 +236,12 @@ describe('fuse projection (challenge time-pressure bar)', () => {
   it('projects the overall budget as a fuse for a budget-based minigame (aim)', () => {
     const s = toActive(started(2), 0.42);
     expect(s.activeMinigameId).toBe('aim');
-    const view = projectFor(s, s.mpcId!);
+    const view = projectFor(s, s.mpcId!, (s.minigameState as { deadlineForChallenge: number }).deadlineForChallenge - 7_000);
     expect(view.fuse).not.toBeNull();
     expect(view.fuse!.totalMs).toBe(12_000);
-    expect(view.fuse!.deadlineAt).toBeGreaterThan(0);
+    expect(view.fuse!.remainingMs).toBe(7_000);
     // The jittery per-target deadline stays hidden even though the fuse shows.
-    expect(view.deadline).toBeNull();
+    expect(view.deadlineRemainingMs).toBeNull();
   });
 
   it('projects no fuse for a secret-timing minigame (reaction)', () => {
@@ -525,12 +525,19 @@ describe('per-player projection', () => {
     // deadline throughout, not just during the secret-timing stages.
     let s = toActive(started(2));
     expect(s.deadline).toBeGreaterThan(1000); // the real scheduling deadline is still set
-    expect(projectFor(s, s.mpcId!).deadline).toBeNull();
+    expect(projectFor(s, s.mpcId!, 1_500).deadlineRemainingMs).toBeNull();
 
     s = apply(s, { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'ready' } }, 2000);
     expect(s.deadline).not.toBeNull(); // still driving the DO alarm...
-    expect(projectFor(s, s.mpcId!).deadline).toBeNull(); // ...never shown to any player
-    for (const p of s.players) expect(projectFor(s, p.playerId).deadline).toBeNull();
+    expect(projectFor(s, s.mpcId!, 2_000).deadlineRemainingMs).toBeNull(); // ...never shown to any player
+    for (const p of s.players) expect(projectFor(s, p.playerId, 2_000).deadlineRemainingMs).toBeNull();
+  });
+
+  it('projects normal phase timing as a relative duration for reconnecting clients', () => {
+    const s = started(2);
+    expect(s.deadline).not.toBeNull();
+    const now = s.deadline! - 12_345;
+    expect(projectFor(s, 'p1', now).deadlineRemainingMs).toBe(12_345);
   });
 });
 

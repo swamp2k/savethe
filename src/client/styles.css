@@ -824,6 +824,13 @@ h3,
   animation: bomb-rattle 0.25s infinite;
 }
 
+.shelf__item--uncommon { border-color: #7be6a2; }
+.shelf__item--rare { border-color: #6fb7ff; box-shadow: 0 0 10px rgba(111, 183, 255, 0.6); }
+.shelf__item--epic { border-color: #d687ff; box-shadow: 0 0 14px rgba(214, 135, 255, 0.75); }
+.shelf__item--legendary { border-color: #ffd23f; box-shadow: 0 0 18px rgba(255, 210, 63, 0.9); animation: legendary-shimmer 1.2s infinite alternate; }
+.rarity { margin: 0; font-weight: 800; text-align: center; }
+@keyframes legendary-shimmer { to { filter: brightness(1.35); } }
+
 @keyframes bomb-rattle {
   0%,
   100% {

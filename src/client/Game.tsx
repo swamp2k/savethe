@@ -124,18 +124,22 @@ function Shelf({
         {plushies.map((p) => (
           <button
             key={p.id}
-            className="shelf__item"
+            className={`shelf__item shelf__item--${p.rarity}`}
             title={`${p.name} — click for a closer look`}
             onClick={() => setInspected(p)}
           >
             <span className="shelf__item-emoji">{p.emoji}</span>
-            {big && <span className="shelf__item-name">{p.name}</span>}
+            {big && <span className="shelf__item-name">{p.name} · {p.value}★</span>}
           </button>
         ))}
       </div>
       {inspected && <PlushieInspector plushie={inspected} onClose={() => setInspected(null)} />}
     </div>
   );
+}
+
+function totalValue(plushies: Plushie[]): number {
+  return plushies.reduce((total, plushie) => total + plushie.value, 0);
 }
 
 function PhasePanel({
@@ -162,6 +166,8 @@ function PhasePanel({
       return <Resolution conn={conn} view={view} nameOf={nameOf} />;
     case 'risk_voting':
       return <RiskVoting conn={conn} view={view} />;
+    case 'cruelty_event':
+      return <CrueltyEventPanel conn={conn} view={view} nameOf={nameOf} />;
     case 'stakes':
       return <Stakes view={view} />;
     case 'run_complete':
@@ -170,8 +176,22 @@ function PhasePanel({
   }
 }
 
-function Timer({ deadline }: { deadline: number | null }) {
-  const seconds = useCountdown(deadline);
+function CrueltyEventPanel({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf: (id: string | null) => string }) {
+  const event = view.cruelty;
+  if (!event) return null;
+  const chooser = event.chooserId === view.youId;
+  const hostage = view.unbanked.find((p) => p.id === event.hostagePlushieId);
+  return <div className="panel center-panel cruelty-panel">
+    <Timer remainingMs={view.deadlineRemainingMs} />
+    <h2 className="panel__title">{event.kind === 'the_deal' ? 'THE DEAL' : `BAD NEWS, ${nameOf(event.chooserId)}.`}</h2>
+    {hostage && <PlushieShowcase plushie={hostage} mood="😨" animation="idle" machine={view.machine} />}
+    <p className="hint center">{chooser ? 'Choose your pain.' : `Waiting for ${nameOf(event.chooserId)} to choose...`}</p>
+    {event.kind === 'the_deal' ? <div className="actions__row"><button className="btn btn--bank" disabled={!chooser} onClick={() => conn.chooseCruelty('sacrifice')}>SACRIFICE IT</button><button className="btn btn--risk" disabled={!chooser} onClick={() => conn.chooseCruelty('harder')}>MAKE IT HARDER (+2)</button></div> : <div className="actions__row"><button className="btn btn--risk" disabled={!chooser} onClick={() => conn.chooseCruelty('nuts')}>NUTS: I am MPC (+1)</button><button className="btn btn--bank" disabled={!chooser} onClick={() => conn.chooseCruelty('teeth')}>TEETH: no support</button></div>}
+  </div>;
+}
+
+function Timer({ remainingMs }: { remainingMs: number | null }) {
+  const seconds = useCountdown(remainingMs);
   const lastTicked = useRef<number | null>(null);
   useEffect(() => {
     if (seconds !== null && seconds >= 1 && seconds <= 5 && lastTicked.current !== seconds) {
@@ -248,7 +268,7 @@ function MpcVoting({
 }) {
   return (
     <div className="panel">
-      <Timer deadline={view.deadline} />
+      <Timer remainingMs={view.deadlineRemainingMs} />
       <h2 className="panel__title">Who do we trust?</h2>
       <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" machine={view.machine} />
       <p className="hint center">Vote for the MPC — the challenge is revealed after.</p>
@@ -279,7 +299,7 @@ function MpcSelected({ view, nameOf }: { view: GameView; nameOf: (id: string | n
   const you = view.mpcId === view.youId;
   return (
     <div className="panel center-panel">
-      <Timer deadline={view.deadline} />
+      <Timer remainingMs={view.deadlineRemainingMs} />
       <div className="big-reveal">{you ? 'You are the MPC!' : `${nameOf(view.mpcId)} is the MPC`}</div>
       <p className="hint">{you ? 'The whole group is watching you.' : 'May the odds be ever in their favour.'}</p>
       <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" machine={view.machine} />
@@ -290,7 +310,7 @@ function MpcSelected({ view, nameOf }: { view: GameView; nameOf: (id: string | n
 function ChallengeIntro({ view, nameOf }: { view: GameView; nameOf: (id: string | null) => string }) {
   return (
     <div className="panel center-panel">
-      <Timer deadline={view.deadline} />
+      <Timer remainingMs={view.deadlineRemainingMs} />
       <p className="hint">Challenge incoming…</p>
       <div className="big-reveal">{view.minigame?.title ?? 'A challenge'}</div>
       <p className="hint">
@@ -305,18 +325,23 @@ function ChallengeIntro({ view, nameOf }: { view: GameView; nameOf: (id: string 
  *  spark at the burn point. Purely presentational — the fraction is recomputed
  *  from the server-issued deadline every frame-ish tick, so it survives
  *  reconnects and never drifts from the authoritative clock. */
-function Fuse({ fuse }: { fuse: { deadlineAt: number; totalMs: number } | null }) {
-  const [now, setNow] = useState(() => Date.now());
+function Fuse({ fuse }: { fuse: { remainingMs: number; totalMs: number } | null }) {
+  const fuseRemainingMs = fuse?.remainingMs;
+  const fuseTotalMs = fuse?.totalMs;
+  const deadlineRef = useRef<number | null>(null);
+  const [now, setNow] = useState(() => performance.now());
   useEffect(() => {
-    if (!fuse) return;
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 100);
+    deadlineRef.current = fuseRemainingMs === undefined ? null : performance.now() + fuseRemainingMs;
+    setNow(performance.now());
+    if (fuseRemainingMs === undefined) return;
+    const id = setInterval(() => setNow(performance.now()), 100);
     return () => clearInterval(id);
-  }, [fuse]);
+  }, [fuseRemainingMs, fuseTotalMs]);
 
-  if (!fuse) return null;
-  const remaining = Math.max(0, Math.min(1, (fuse.deadlineAt - now) / fuse.totalMs));
-  const urgent = fuse.deadlineAt - now <= 5000;
+  if (fuseRemainingMs === undefined || fuseTotalMs === undefined || deadlineRef.current === null) return null;
+  const remainingMs = Math.max(0, deadlineRef.current - now);
+  const remaining = Math.max(0, Math.min(1, remainingMs / fuseTotalMs));
+  const urgent = remainingMs <= 5000;
   return (
     <div className={`fuse ${urgent ? 'fuse--urgent' : ''}`} role="timer" aria-label="Time remaining">
       <div className="fuse__rope" style={{ width: `${remaining * 100}%` }}>
@@ -339,7 +364,7 @@ function Challenge({
   const MinigameUI = view.minigame ? getMinigameUI(view.minigame.id) : undefined;
   return (
     <div className="panel center-panel">
-      <Timer deadline={view.deadline} />
+      <Timer remainingMs={view.deadlineRemainingMs} />
       <Fuse fuse={view.fuse} />
       {MinigameUI ? (
         <MinigameUI conn={conn} view={view} nameOf={nameOf} />
@@ -371,7 +396,7 @@ function Resolution({
   const MinigameUI = view.minigame ? getMinigameUI(view.minigame.id) : undefined;
   return (
     <div className="panel center-panel">
-      <Timer deadline={view.deadline} />
+      <Timer remainingMs={view.deadlineRemainingMs} />
       <div className={`big-reveal ${outcome.success ? 'good' : 'bad'}`}>
         {outcome.success ? 'SAVED!' : 'DOOMED'}
       </div>
@@ -391,8 +416,9 @@ function Resolution({
 function RiskVoting({ conn, view }: { conn: Connection; view: GameView }) {
   return (
     <div className="panel center-panel">
-      <Timer deadline={view.deadline} />
+      <Timer remainingMs={view.deadlineRemainingMs} />
       <h2 className="panel__title">Bank or Risk?</h2>
+      <p className="typing-progress">Current pot: {totalValue(view.unbanked)}★</p>
       <Shelf label="Currently at risk" plushies={view.unbanked} danger empty="—" />
       <div className="actions__row">
         <button
@@ -422,7 +448,7 @@ function RiskVoting({ conn, view }: { conn: Connection; view: GameView }) {
 function Stakes({ view }: { view: GameView }) {
   return (
     <div className="panel center-panel">
-      <Timer deadline={view.deadline} />
+      <Timer remainingMs={view.deadlineRemainingMs} />
       <h2 className="panel__title">Round {view.round} — here we go again</h2>
       <PlushieShowcase plushie={view.currentPlushie} mood="🙂" animation="idle" machine={view.machine} />
       <Shelf label="😰 Still at risk" plushies={view.unbanked} danger empty="—" />
@@ -436,7 +462,7 @@ function RunOver({ view }: { view: GameView }) {
   const banked = view.phase === 'run_complete';
   return (
     <div className="panel center-panel">
-      <Timer deadline={view.deadline} />
+      <Timer remainingMs={view.deadlineRemainingMs} />
       <div className={`big-reveal ${banked ? 'good' : 'bad'}`}>{banked ? 'Banked!' : 'Run over'}</div>
       <p className="hint center">
         {summary

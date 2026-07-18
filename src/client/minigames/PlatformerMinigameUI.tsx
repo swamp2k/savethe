@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { Plushie } from '../../shared/game';
 import { PlushieShowcase } from '../PlushieShowcase';
-import { modelFor, randomModeledSpecies } from '../models';
+import { modelFor } from '../models';
 import { playSound } from '../sound';
 import type { MinigameUIComponent } from './types';
 
@@ -35,9 +36,8 @@ function Legend() {
  * JUMP hops the whole model in an arc; DUCK squashes it flat from the feet
  * up. The emoji stands in while the viewer loads or for a failed model.
  */
-function Runner({ action, onActionDone }: { action: 'jump' | 'duck' | null; onActionDone: () => void }) {
-  const [species] = useState(randomModeledSpecies);
-  const src = modelFor(species);
+function Runner({ plushie, action, onActionDone }: { plushie: Plushie | null; action: 'jump' | 'duck' | null; onActionDone: () => void }) {
+  const src = plushie ? modelFor(plushie.species) : undefined;
   const [viewerState, setViewerState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const viewerRef = useRef<HTMLElement | null>(null);
 
@@ -138,7 +138,7 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
 
   const lane = (obstacle: React.ReactNode) => (
     <div className="platformer-lane">
-      <Runner action={runnerAction} onActionDone={() => setRunnerAction(null)} />
+      <Runner plushie={view.currentPlushie} action={runnerAction} onActionDone={() => setRunnerAction(null)} />
       {obstacle}
     </div>
   );
