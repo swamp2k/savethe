@@ -2,14 +2,8 @@ import type { Connection } from './useGameConnection';
 import type { GameView, Plushie } from '../shared/game';
 import { MIN_PLAYERS, MAX_PLAYERS } from '../shared/constants';
 import { useCountdown } from './useCountdown';
-
-interface DebugView {
-  role: 'mpc' | 'support' | 'spectator';
-  canAct: string[];
-  mpcChoice: 'none' | 'save' | 'doom';
-  rescuedBy: string | null;
-  endsAt: number;
-}
+import { PlushieStage } from './PlushieStage';
+import { getMinigameUI } from './minigames/registry';
 
 export function Game({ conn, view }: { conn: Connection; view: GameView }) {
   const nameOf = (id: string | null): string =>
@@ -90,7 +84,7 @@ function PhasePanel({
     case 'challenge_active':
       return <Challenge conn={conn} view={view} nameOf={nameOf} />;
     case 'round_resolution':
-      return <Resolution view={view} nameOf={nameOf} />;
+      return <Resolution conn={conn} view={view} nameOf={nameOf} />;
     case 'risk_voting':
       return <RiskVoting conn={conn} view={view} />;
     case 'run_complete':
@@ -103,20 +97,6 @@ function Timer({ deadline }: { deadline: number | null }) {
   const seconds = useCountdown(deadline);
   if (seconds === null) return null;
   return <div className={`timer ${seconds <= 5 ? 'timer--urgent' : ''}`}>{seconds}s</div>;
-}
-
-function PlushieStage({ plushie, mood }: { plushie: Plushie | null; mood: string }) {
-  if (!plushie) return null;
-  return (
-    <div className="stage">
-      <div className="stage__press">🏭</div>
-      <div className="stage__plushie">
-        <span className="stage__emoji">{plushie.emoji}</span>
-        <span className="stage__mood">{mood}</span>
-      </div>
-      <div className="stage__name">{plushie.name}</div>
-    </div>
-  );
 }
 
 function Lobby({ conn, view }: { conn: Connection; view: GameView }) {
@@ -229,54 +209,31 @@ function Challenge({
   view: GameView;
   nameOf: (id: string | null) => string;
 }) {
-  const mg = view.minigame?.view as DebugView | undefined;
-  const role = mg?.role ?? 'spectator';
-  const canAct = mg?.canAct ?? [];
-
+  const MinigameUI = view.minigame ? getMinigameUI(view.minigame.id) : undefined;
   return (
     <div className="panel center-panel">
       <Timer deadline={view.deadline} />
-      <PlushieStage plushie={view.currentPlushie} mood="😨" />
-
-      {role === 'mpc' && (
-        <div className="actions">
-          <p className="hint">You are the MPC. Save the plushie!</p>
-          {canAct.includes('save') ? (
-            <div className="actions__row">
-              <button className="btn btn--save" onClick={() => conn.minigameAction({ kind: 'save' })}>
-                SAVE
-              </button>
-              <button className="btn btn--doom" onClick={() => conn.minigameAction({ kind: 'doom' })}>
-                DOOM
-              </button>
-            </div>
-          ) : (
-            <p className="hint">You pressed {mg?.mpcChoice}. Now everyone waits…</p>
-          )}
-        </div>
+      {MinigameUI ? (
+        <MinigameUI conn={conn} view={view} nameOf={nameOf} />
+      ) : (
+        <PlushieStage plushie={view.currentPlushie} mood="😨" />
       )}
-
-      {role === 'support' && (
-        <div className="actions">
-          <p className="hint">Support — you can rescue if the MPC fumbles.</p>
-          {canAct.includes('rescue') ? (
-            <button className="btn btn--save" onClick={() => conn.minigameAction({ kind: 'rescue' })}>
-              RESCUE!
-            </button>
-          ) : (
-            <p className="hint">Rescue used{mg?.rescuedBy ? ` by ${nameOf(mg.rescuedBy)}` : ''}.</p>
-          )}
-        </div>
-      )}
-
-      {role === 'spectator' && <p className="hint">Watching {nameOf(view.mpcId)} sweat…</p>}
     </div>
   );
 }
 
-function Resolution({ view, nameOf }: { view: GameView; nameOf: (id: string | null) => string }) {
+function Resolution({
+  conn,
+  view,
+  nameOf,
+}: {
+  conn: Connection;
+  view: GameView;
+  nameOf: (id: string | null) => string;
+}) {
   const outcome = view.outcome;
   if (!outcome) return null;
+  const MinigameUI = view.minigame ? getMinigameUI(view.minigame.id) : undefined;
   return (
     <div className="panel center-panel">
       <Timer deadline={view.deadline} />
@@ -286,6 +243,7 @@ function Resolution({ view, nameOf }: { view: GameView; nameOf: (id: string | nu
       <PlushieStage plushie={outcome.plushie} mood={outcome.success ? '😄' : '💥'} />
       <p className="hint center">{outcome.headline}</p>
       {outcome.savedBy && <p className="hint center">Rescued by {nameOf(outcome.savedBy)} 🦸</p>}
+      {MinigameUI && <MinigameUI conn={conn} view={view} nameOf={nameOf} />}
     </div>
   );
 }

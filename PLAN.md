@@ -8,8 +8,10 @@ bank (safe) or risk (harder round, better reward).
 This plan is the agreed roadmap. Work top to bottom. Each milestone ends with explicit
 exit criteria — do not start the next milestone until they pass.
 
-**Status: nothing is built.** The repo starts empty. Any prior implementation described
-in the design document no longer exists.
+**Status: M0–M3 built and deployed.** Scaffold, rooms/identity, the full round engine,
+and the Reaction Test vertical slice are live. M3's exit criteria has one part only a
+human can complete: **a real 3+ person playtest hasn't happened yet.** See the M3
+section below before starting M4.
 
 ---
 
@@ -182,6 +184,21 @@ answers the core question: *is it fun?*
 **Exit criteria:** all M2 exit tests still pass with Reaction Test swapped in via the
 registry (no engine changes); deployed; **playtest with 3+ real humans in the same
 room**. Go/no-go: if the core loop isn't fun, iterate here — do not proceed to M4.
+
+**Status:** built and deployed — Reaction Test plugin, three outcomes, hydraulic-press
+presentation with escalating mood, resolution-time stat reveal (elapsed times for
+everyone who attempted). 80 automated tests pass, including the same engine suite
+from M2 driving rounds through the real Reaction Test with no engine changes. Verified
+live against the dev Worker (real WebSockets + DO alarms): clean victory, MPC
+alternation across rounds, the hidden-signal window, a too-slow-but-valid MPC click
+correctly opening the support window, and a correctly-timed team rescue.
+
+**Not yet done:** MPC naming the rescued plushie (decision 8) — plushies currently get
+a random silly default name only; there's no rename action yet. Small, deferred rather
+than blocking.
+
+**Still open:** the human playtest itself. Only a real group can answer "is this fun?"
+— that can't be simulated or scripted.
 
 ## Milestone 4 — Typing Challenge (architecture stress test)
 

@@ -397,7 +397,16 @@ function applyTick(state: GameState, ctx: MinigameContext): GameState {
 export function projectFor(state: GameState, viewerId: string): GameView {
   const game = state.activeMinigameId ? getMinigame(state.activeMinigameId) : undefined;
   const showMinigame =
-    game != null && (state.phase === 'challenge_intro' || state.phase === 'challenge_active');
+    game != null &&
+    (state.phase === 'challenge_intro' ||
+      state.phase === 'challenge_active' ||
+      state.phase === 'round_resolution');
+
+  // Some minigames' fairness depends on a surprise signal (e.g. a reaction
+  // test's random pre-signal delay). Showing the generic countdown for those
+  // would leak exactly when that signal fires; let the minigame suppress it.
+  const hideDeadline =
+    state.phase === 'challenge_active' && game != null && (game.isDeadlineHidden?.(state.minigameState) ?? false);
 
   const mpcVoteTally: Record<string, number> = {};
   for (const candidateId of Object.values(state.mpcVotes)) {
@@ -423,7 +432,7 @@ export function projectFor(state: GameState, viewerId: string): GameView {
     youId: viewerId,
     hostId: state.hostId,
     players,
-    deadline: state.deadline,
+    deadline: hideDeadline ? null : state.deadline,
     mpcId: state.mpcId,
     previousMpcId: state.previousMpcId,
     eligibleIds: state.phase === 'mpc_voting' ? eligibleCandidates(state) : [],

@@ -42,16 +42,22 @@ setup that connects the Worker to this GitHub repo.
 
 ## Status
 
-**Milestones 0–2 complete.**
+**Milestones 0–3 built and deployed.**
 
-- **M0/M1:** scaffold + deploy pipeline; room codes, typed & validated WebSocket
-  protocol, connection-derived identity with reconnect (newest-connection-wins),
-  lobby UI, roster/room lifecycle on Durable Object alarms.
+- **M0/M1:** scaffold + deploy pipeline; 3-character room codes, typed & validated
+  WebSocket protocol, connection-derived identity with reconnect
+  (newest-connection-wins), lobby UI, roster/room lifecycle on Durable Object alarms.
 - **M2:** the full round loop on a pure, deterministic engine — phase state machine,
   MPC voting (live tallies, previous-MPC exclusion, 2-player alternation, tie-break),
   Bank/Risk with the trophy shelf, difficulty scaling, per-player state projection,
-  and a minigame plugin contract + registry driving a placeholder "debug" minigame.
-  All deadlines run on Durable Object alarms.
+  and a minigame plugin contract + registry.
+- **M3:** the Reaction Test — MPC arms the test, a random signal delay stays hidden
+  from every client (the deadline is deliberately suppressed so nobody can time a
+  click to a known schedule), then a threshold-based click with server-side
+  plausibility validation. Miss it and the whole support team gets one shared
+  emergency-rescue window. Hydraulic-press presentation with escalating plushie mood,
+  and a resolution-time stat reveal of everyone's reaction times.
 
-Next up is Milestone 3 — the Reaction Test minigame and the Hydraulic Press
-presentation (the playable vertical slice). See PLAN.md.
+**M3's exit criteria has one piece left that only a human can do: a real 3+ person
+playtest.** See PLAN.md's Milestone 3 section for what's built vs. still open before
+starting M4.

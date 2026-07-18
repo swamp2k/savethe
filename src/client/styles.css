@@ -440,6 +440,55 @@ body {
   font-size: 1.2rem;
 }
 
+.reaction-target {
+  width: 100%;
+  padding: 1.4rem;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.reaction-target--wait {
+  background: #4b3a6b;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.reaction-target--go {
+  animation: reaction-pop 0.15s ease-out;
+}
+
+@keyframes reaction-pop {
+  from {
+    transform: scale(0.94);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.stat-reveal {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.stat-reveal__row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 0.7rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.stat-reveal__win {
+  color: var(--ok);
+  font-weight: 700;
+}
+
 .btn--bank {
   background: linear-gradient(135deg, #4ade80, #22c55e);
   color: #06301b;

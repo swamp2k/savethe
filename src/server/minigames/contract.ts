@@ -56,6 +56,16 @@ export interface Minigame {
   /** The next moment this minigame needs the engine to wake it, or null. */
   getNextDeadline(state: unknown): number | null;
 
+  /**
+   * Whether the engine's generic deadline countdown must be hidden from
+   * players right now. A minigame whose fairness depends on a surprise signal
+   * (e.g. a reaction test's random pre-signal delay) would otherwise leak
+   * exactly when that signal fires through the generic phase timer, letting a
+   * client fire a click precisely on cue instead of reacting to it. Optional;
+   * a minigame that has no such secret can omit it (default: never hidden).
+   */
+  isDeadlineHidden?(state: unknown): boolean;
+
   /** Per-player projection: what this specific viewer may see. */
   getStateForPlayer(state: unknown, viewerId: string): unknown;
 }
