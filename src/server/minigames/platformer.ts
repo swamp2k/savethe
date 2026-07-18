@@ -63,9 +63,22 @@ const BASE_OBSTACLES = 5;
 const OBSTACLES_STEP = 1;
 const MAX_OBSTACLES = 10;
 
-const BASE_WINDOW_MS = 700;
-const WINDOW_STEP_MS = 30;
-const MIN_WINDOW_MS = 400;
+// Choice-reaction scale, not pure-reflex scale: the MPC has to read WHICH
+// obstacle arrived (jump vs duck) and pick the matching button, which takes
+// humans roughly 500-700ms before any device latency. The original 700ms
+// base window made round one nearly unwinnable.
+const BASE_WINDOW_MS = 1500;
+const WINDOW_STEP_MS = 75;
+const MIN_WINDOW_MS = 900;
+
+/** Extra server-side slack past the window before declaring a timeout. The
+ *  pass/fail check is the client-measured `elapsedMs` vs the window (PLAN.md
+ *  decision 3); this buffer only covers transit both ways (state broadcast to
+ *  the client + the react message back) plus alarm jitter, so a laggy
+ *  connection can't spend the player's window for them. Without it, the
+ *  deadline used to fire `window` ms after the SERVER spawned the obstacle —
+ *  often before the player had even seen it. */
+const DEADLINE_TRANSIT_BUFFER_MS = 800;
 
 const REQUIRED_OBSTACLES_FLOOR_RATIO = 0.4;
 const REQUIRED_OBSTACLES_FLOOR_MIN = 3;
@@ -134,7 +147,7 @@ export const platformerGame: Minigame = {
       obstacleId: s.nextObstacleId,
       nextObstacleId: s.nextObstacleId + 1,
       obstacleSpawnAt: ctx.now,
-      obstacleDeadlineAt: ctx.now + s.obstacleWindowMs,
+      obstacleDeadlineAt: ctx.now + s.obstacleWindowMs + DEADLINE_TRANSIT_BUFFER_MS,
     };
   },
 
@@ -162,7 +175,7 @@ export const platformerGame: Minigame = {
       nextObstacleId: s.nextObstacleId + 1,
       obstacleType: randomObstacleType(ctx.random),
       obstacleSpawnAt: ctx.now,
-      obstacleDeadlineAt: ctx.now + s.obstacleWindowMs,
+      obstacleDeadlineAt: ctx.now + s.obstacleWindowMs + DEADLINE_TRANSIT_BUFFER_MS,
     };
   },
 

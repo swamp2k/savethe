@@ -84,9 +84,23 @@ describe('platformer: MPC reactions', () => {
 
   it('a plausible but too-slow correct response still fails the round', () => {
     const s = fresh();
-    // difficulty 1 -> obstacleWindowMs 700; 900ms is plausible but over the window.
-    const hit = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 900 }, ctx(900));
+    // difficulty 1 -> obstacleWindowMs 1500; 1700ms is plausible but over the window.
+    const hit = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 1700 }, ctx(1700));
     expect(platformerGame.evaluate(hit, ctx(0))).toMatchObject({ status: 'resolved', success: false });
+  });
+
+  it('gives the server deadline transit slack beyond the player-facing window', () => {
+    // Regression: the deadline used to be exactly spawn + window, so network
+    // transit ate the player's window and round one often timed out instantly.
+    const s = fresh();
+    const windowMs = view(s, 'mpc').obstacleWindowMs;
+    expect(platformerGame.getNextDeadline(s)!).toBeGreaterThan(windowMs);
+    // Just past the window itself must NOT time out yet…
+    const early = platformerGame.onDeadline(s, ctx(windowMs + 1));
+    expect(platformerGame.evaluate(early, ctx(0))).toEqual({ status: 'active' });
+    // …and a correct in-window reaction arriving after transit delay still counts.
+    const late = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 1400 }, ctx(windowMs + 300));
+    expect(view(late, 'mpc').obstaclesCleared).toBe(1);
   });
 
   it('the obstacle window expiring fails the round', () => {
@@ -106,9 +120,9 @@ describe('platformer: MPC reactions', () => {
       obstacleWindowMs: number;
     };
     expect(easy.requiredObstacles).toBe(5);
-    expect(easy.obstacleWindowMs).toBe(700);
+    expect(easy.obstacleWindowMs).toBe(1500);
     expect(hard.requiredObstacles).toBe(10); // capped
-    expect(hard.obstacleWindowMs).toBe(400); // floored
+    expect(hard.obstacleWindowMs).toBe(900); // floored
   });
 
   it('always hides the generic countdown during the challenge', () => {
