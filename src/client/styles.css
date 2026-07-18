@@ -499,6 +499,23 @@ h3,
 .shelf__item {
   display: inline-flex;
   animation: trophy-pop 0.5s cubic-bezier(0.34, 1.8, 0.64, 1);
+  /* It's a button now (click to inspect) — shed the native chrome. */
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.shelf__item:hover .shelf__item-emoji {
+  transform: scale(1.15);
+}
+
+.shelf__item-emoji {
+  display: inline-block;
+  transition: transform 0.15s cubic-bezier(0.34, 1.6, 0.64, 1);
 }
 
 .shelf__empty {
@@ -753,6 +770,151 @@ h3,
 .showcase--compact .showcase__viewer {
   width: 160px;
   height: 160px;
+}
+
+/* --- Challenge fuse (time pressure) --- */
+
+.fuse {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto 0.4rem;
+  height: 1.6rem;
+}
+
+.fuse__rope {
+  position: relative;
+  height: 6px;
+  min-width: 0;
+  border-radius: 3px;
+  /* Twisted-rope stripes. */
+  background: repeating-linear-gradient(75deg, #c98a4b 0 5px, #8a5a2b 5px 10px);
+  box-shadow: 0 1px 2px rgba(10, 2, 28, 0.5);
+  transition: width 0.12s linear;
+}
+
+.fuse__spark {
+  position: absolute;
+  left: -0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.05rem;
+  filter: drop-shadow(0 0 5px rgba(255, 210, 63, 0.9));
+  animation: fuse-flicker 0.18s infinite alternate;
+}
+
+@keyframes fuse-flicker {
+  from {
+    transform: translateY(-50%) scale(0.85) rotate(-12deg);
+  }
+  to {
+    transform: translateY(-50%) scale(1.15) rotate(10deg);
+  }
+}
+
+.fuse__bomb {
+  font-size: 1.4rem;
+  margin-left: 3px;
+  line-height: 1;
+}
+
+.fuse--urgent .fuse__bomb {
+  animation: bomb-rattle 0.25s infinite;
+}
+
+@keyframes bomb-rattle {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(-1px, 1px) rotate(-6deg);
+  }
+  75% {
+    transform: translate(1px, -1px) rotate(6deg);
+  }
+}
+
+/* --- Plushie inspector (click a shelf trophy to admire the model) --- */
+
+.inspector {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(10, 2, 28, 0.75);
+  backdrop-filter: blur(4px);
+  animation: inspector-fade 0.18s ease-out;
+}
+
+@keyframes inspector-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.inspector__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1.5rem 2rem 1.25rem;
+  border-radius: var(--radius, 18px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 30%), var(--bg-panel);
+  border: 1px solid var(--bg-panel-edge);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+  animation: showcase-in 0.3s cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+.inspector__viewer {
+  width: min(70vw, 420px);
+  height: min(60vh, 420px);
+  background: radial-gradient(ellipse 45% 14% at 50% 82%, rgba(255, 210, 63, 0.3) 0%, transparent 100%);
+  --poster-color: transparent;
+}
+
+.inspector__fallback {
+  width: min(70vw, 420px);
+  height: min(60vh, 320px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7rem;
+  filter: drop-shadow(0 8px 10px rgba(10, 2, 28, 0.5));
+}
+
+.inspector__name {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.inspector__close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fg, #fff);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.inspector__close:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 @keyframes showcase-in {
@@ -1196,33 +1358,58 @@ h3,
   overflow: hidden;
 }
 
+.platformer-runner {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  /* The 🏃 glyph faces left; the run goes left-to-right, so mirror it to
+     face the incoming obstacle. */
+  transform: translate(-50%, -50%) scaleX(-1);
+  font-size: 3rem;
+  animation: platformer-bob 0.45s ease-in-out infinite alternate;
+}
+
+@keyframes platformer-bob {
+  from {
+    transform: translate(-50%, -52%) scaleX(-1);
+  }
+  to {
+    transform: translate(-50%, -46%) scaleX(-1);
+  }
+}
+
 .platformer-obstacle {
   position: absolute;
   top: 50%;
-  left: 50%;
+  left: 95%;
   transform: translate(-50%, -50%);
   font-size: 3.4rem;
+  /* Duration is set inline per-obstacle (obstacleWindowMs): the obstacle
+     crossing the lane IS the countdown — it reaches the runner exactly when
+     the reaction window closes. */
   animation-name: platformer-approach;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
 }
 
 .platformer-obstacle--static {
+  left: 60%;
   animation: none;
 }
 
 @keyframes platformer-approach {
   0% {
-    transform: translate(-50%, -50%) scale(0.4);
-    opacity: 0.4;
+    left: 95%;
+    transform: translate(-50%, -50%) scale(0.7);
+    opacity: 0.8;
   }
-  85% {
-    transform: translate(-50%, -50%) scale(1.15);
+  90% {
     opacity: 1;
   }
   100% {
-    transform: translate(-50%, -50%) scale(1.3);
-    opacity: 0.6;
+    left: 16%;
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
   }
 }
 

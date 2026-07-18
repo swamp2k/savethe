@@ -424,6 +424,13 @@ export function projectFor(state: GameState, viewerId: string): GameView {
   const hideDeadline =
     state.phase === 'challenge_active' && game != null && (game.isDeadlineHidden?.(state.minigameState) ?? false);
 
+  // The burning-fuse pressure bar: only while the challenge is live, and only
+  // for minigames that expose a stable, non-secret overall budget.
+  const fuse =
+    state.phase === 'challenge_active' && game != null
+      ? (game.getFuse?.(state.minigameState) ?? null)
+      : null;
+
   const mpcVoteTally: Record<string, number> = {};
   for (const candidateId of Object.values(state.mpcVotes)) {
     mpcVoteTally[candidateId] = (mpcVoteTally[candidateId] ?? 0) + 1;
@@ -450,6 +457,7 @@ export function projectFor(state: GameState, viewerId: string): GameView {
     hostId: state.hostId,
     players,
     deadline: hideDeadline ? null : state.deadline,
+    fuse,
     mpcId: state.mpcId,
     previousMpcId: state.previousMpcId,
     eligibleIds: state.phase === 'mpc_voting' ? eligibleCandidates(state) : [],

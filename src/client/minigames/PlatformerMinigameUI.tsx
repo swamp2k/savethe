@@ -17,6 +17,16 @@ interface PlatformerView {
 const OBSTACLE_LABEL: Record<'jump' | 'duck', string> = { jump: 'JUMP!', duck: 'DUCK!' };
 const OBSTACLE_EMOJI: Record<'jump' | 'duck', string> = { jump: '🪨', duck: '🪵' };
 
+/** One-line how-to, always visible: playtesting showed a lone obstacle emoji
+ *  in an empty lane reads as "…now what?" without it. */
+function Legend() {
+  return (
+    <p className="hint center platformer-legend">
+      🪨 rock → <strong>JUMP</strong> over it &nbsp;·&nbsp; 🪵 log → <strong>DUCK</strong> under it
+    </p>
+  );
+}
+
 export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) => {
   const mg = view.minigame?.view as PlatformerView | undefined;
 
@@ -66,13 +76,16 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
         <p className="typing-progress">
           {mg.obstaclesCleared} / {mg.requiredObstacles} cleared
         </p>
+        <Legend />
         <div className="platformer-lane">
+          <span className="platformer-runner">🏃</span>
           {mg.obstacleType && (
             <span key={obstacleId} className="platformer-obstacle" style={{ animationDuration: `${mg.obstacleWindowMs}ms` }}>
               {OBSTACLE_EMOJI[mg.obstacleType]}
             </span>
           )}
         </div>
+        <p className="hint center">Hit the right button before it reaches you!</p>
         <div className="actions__row">
           <button className="btn btn--primary" onClick={() => react('jump')}>
             {OBSTACLE_LABEL.jump}
@@ -90,9 +103,11 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
       <>
         <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" machine={view.machine} compact />
         <p className="hint">
-          Help {nameOf(view.mpcId)}! ({mg.supportClears} completed)
+          Clear your own obstacle to shorten {nameOf(view.mpcId)}&rsquo;s run! ({mg.supportClears} cleared)
         </p>
+        <Legend />
         <div className="platformer-lane">
+          <span className="platformer-runner">🏃</span>
           {mg.myObstacleType && <span className="platformer-obstacle platformer-obstacle--static">{OBSTACLE_EMOJI[mg.myObstacleType]}</span>}
         </div>
         <div className="actions__row">

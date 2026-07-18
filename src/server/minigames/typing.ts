@@ -302,6 +302,11 @@ export const typingGame: Minigame = {
     return s.outcome === 'pending' ? s.deadlineForChallenge : null;
   },
 
+  getFuse(state: unknown): { deadlineAt: number; totalMs: number } | null {
+    const s = asState(state);
+    return s.outcome === 'pending' ? { deadlineAt: s.deadlineForChallenge, totalMs: s.timeBudgetMs } : null;
+  },
+
   getStateForPlayer(state: unknown, viewerId: string): unknown {
     const s = asState(state);
     const role = viewerId === s.mpcId ? 'mpc' : s.supportIds.includes(viewerId) ? 'support' : 'spectator';
