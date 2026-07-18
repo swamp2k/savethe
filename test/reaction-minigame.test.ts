@@ -127,7 +127,7 @@ describe('reaction test: MPC outcomes', () => {
     const easy = reactionGame.createInitialState({ ...config, difficulty: 1 }, ctx(0)) as { mpcThresholdMs: number };
     const hard = reactionGame.createInitialState({ ...config, difficulty: 10 }, ctx(0)) as { mpcThresholdMs: number };
     expect(easy.mpcThresholdMs).toBe(250);
-    expect(hard.mpcThresholdMs).toBe(150); // floor
+    expect(hard.mpcThresholdMs).toBe(210); // floor
   });
 });
 

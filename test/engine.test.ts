@@ -55,7 +55,7 @@ function toActive(state: GameState): GameState {
  * so the claimed elapsedMs is always self-consistent with the server's
  * arrival-time plausibility check (arrivalDelta === elapsedMs exactly).
  * 150ms is comfortably under the MPC threshold at every difficulty this
- * suite reaches (round 1: 250ms, round 2: 230ms); 900ms is comfortably over;
+ * suite reaches (round 1: 250ms, round 2: 240ms); 900ms is comfortably over;
  * 200ms is comfortably under the fixed 350ms support threshold.
  */
 function mpcArmAndAwaitGo(s: GameState, readyAt: number): GameState {
