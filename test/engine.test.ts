@@ -234,9 +234,9 @@ describe('the three round outcomes', () => {
 
 describe('minigame selection (M4 exit criteria: both minigames playable, no engine changes)', () => {
   it('can select and fully play the Typing Challenge through the exact same generic dispatch', () => {
-    // Three equal-weight entries now (reaction, typing, aim); random=0.5 lands
-    // on the middle one (typing).
-    let s = toActive(started(2), 0.5);
+    // Six equal-weight entries now (reaction, typing, aim, memory, tetris,
+    // platformer); random=0.25 lands on the second one (typing).
+    let s = toActive(started(2), 0.25);
     expect(s.activeMinigameId).toBe('typing');
 
     const mg = projectFor(s, s.mpcId!).minigame;
@@ -254,7 +254,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
   });
 
   it('a support word-burst contributes toward a Typing round exactly like any other minigame action', () => {
-    let s = toActive(started(3), 0.5);
+    let s = toActive(started(3), 0.25);
     expect(s.activeMinigameId).toBe('typing');
     const mpc = s.mpcId!;
     const supporter = ['p1', 'p2', 'p3'].find((id) => id !== mpc)!;
@@ -275,9 +275,9 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
   });
 
   it('can select and fully play Aim Trainer through the exact same generic dispatch', () => {
-    // Three equal-weight entries (reaction, typing, aim); random=0.9 lands on
-    // the last one (aim).
-    let s = toActive(started(2), 0.9);
+    // Six equal-weight entries (reaction, typing, aim, memory, tetris,
+    // platformer); random=0.42 lands on the third one (aim).
+    let s = toActive(started(2), 0.42);
     expect(s.activeMinigameId).toBe('aim');
 
     const required = (projectFor(s, s.mpcId!).minigame!.view as { requiredHits: number }).requiredHits;
@@ -288,6 +288,79 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
         s,
         { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'hit', targetId: mg.targetId, elapsedMs: 200 } },
         spawnAt + 200,
+      );
+    }
+    expect(s.phase).toBe('round_resolution');
+    expect(s.outcome?.success).toBe(true);
+    expect(s.unbanked).toHaveLength(1);
+  });
+
+  it('can select and fully play Memory through the exact same generic dispatch', () => {
+    // Six equal-weight entries (reaction, typing, aim, memory, tetris,
+    // platformer); random=0.58 lands on the fourth one (memory).
+    let s = toActive(started(2), 0.58);
+    expect(s.activeMinigameId).toBe('memory');
+
+    // Let the study phase's own deadline elapse to reach recall.
+    s = apply(s, { type: 'tick' }, s.deadline! + 1);
+    const mg = projectFor(s, s.mpcId!).minigame!.view as {
+      stage: string;
+      requiredCorrect: number;
+      alphabet: string[];
+    };
+    expect(mg.stage).toBe('recall');
+
+    // random=0.58 deterministically picks the same alphabet entry for every
+    // symbol in the sequence.
+    const symbol = mg.alphabet[Math.floor(0.58 * mg.alphabet.length)];
+    for (let i = 0; i < mg.requiredCorrect; i++) {
+      s = apply(
+        s,
+        { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'recall', symbol } },
+        s.deadline! - 1000,
+      );
+    }
+    expect(s.phase).toBe('round_resolution');
+    expect(s.outcome?.success).toBe(true);
+    expect(s.unbanked).toHaveLength(1);
+  });
+
+  it('can select and play Block Fit through the exact same generic dispatch', () => {
+    // Six equal-weight entries (reaction, typing, aim, memory, tetris,
+    // platformer); random=0.75 lands on the fifth one (tetris).
+    let s = toActive(started(2), 0.75);
+    expect(s.activeMinigameId).toBe('tetris');
+
+    const before = projectFor(s, s.mpcId!).minigame!.view as { linesCleared: number };
+    s = apply(
+      s,
+      { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'drop' } },
+      s.deadline! - 1000,
+    );
+    const after = projectFor(s, s.mpcId!).minigame!.view as { linesCleared: number; grid: boolean[][] };
+    expect(after.grid.some((row) => row.some(Boolean))).toBe(true); // the piece locked somewhere
+    expect(after.linesCleared).toBe(before.linesCleared); // one piece alone can't clear a 6-wide row
+    expect(s.phase).toBe('challenge_active');
+  });
+
+  it('can select and fully play Obstacle Run through the exact same generic dispatch', () => {
+    // Six equal-weight entries (reaction, typing, aim, memory, tetris,
+    // platformer); random=0.92 lands on the last one (platformer).
+    let s = toActive(started(2), 0.92);
+    expect(s.activeMinigameId).toBe('platformer');
+
+    const required = (projectFor(s, s.mpcId!).minigame!.view as { requiredObstacles: number }).requiredObstacles;
+    // random=0.92 -> randomObstacleType always returns 'duck'; pass it through
+    // on every action too, since each cleared obstacle spawns the next one
+    // using that action's own ctx.random (apply()'s default is 0, which would
+    // start generating 'jump' obstacles instead after the first response).
+    for (let i = 0; i < required; i++) {
+      const spawnAt = s.deadline! - 700; // difficulty 1 -> obstacleWindowMs 700
+      s = apply(
+        s,
+        { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'react', response: 'duck', elapsedMs: 200 } },
+        spawnAt + 200,
+        0.92,
       );
     }
     expect(s.phase).toBe('round_resolution');

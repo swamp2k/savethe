@@ -1,7 +1,10 @@
 import type { Minigame } from './contract';
 import { aimGame } from './aim';
 import { debugGame } from './debug';
+import { memoryGame } from './memory';
+import { platformerGame } from './platformer';
 import { reactionGame } from './reaction';
+import { tetrisGame } from './tetris';
 import { typingGame } from './typing';
 
 /**
@@ -23,6 +26,9 @@ const SELECTABLE: readonly { game: Minigame; weight: number }[] = [
   { game: reactionGame, weight: 1 },
   { game: typingGame, weight: 1 },
   { game: aimGame, weight: 1 },
+  { game: memoryGame, weight: 1 },
+  { game: tetrisGame, weight: 1 },
+  { game: platformerGame, weight: 1 },
 ];
 const ALL: readonly Minigame[] = [debugGame, ...SELECTABLE.map((s) => s.game)];
 

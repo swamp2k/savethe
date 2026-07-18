@@ -3,7 +3,7 @@ import { getMinigame, minigameCount, pickMinigame } from '../src/server/minigame
 
 describe('minigame registry', () => {
   it('lists exactly the real (non-debug) minigames as selectable', () => {
-    expect(minigameCount()).toBe(3);
+    expect(minigameCount()).toBe(6);
   });
 
   it('resolves every registered id, including the excluded-from-selection debug game', () => {
@@ -11,6 +11,9 @@ describe('minigame registry', () => {
     expect(getMinigame('reaction')?.id).toBe('reaction');
     expect(getMinigame('typing')?.id).toBe('typing');
     expect(getMinigame('aim')?.id).toBe('aim');
+    expect(getMinigame('memory')?.id).toBe('memory');
+    expect(getMinigame('tetris')?.id).toBe('tetris');
+    expect(getMinigame('platformer')?.id).toBe('platformer');
     expect(getMinigame('nonexistent')).toBeUndefined();
   });
 
@@ -27,6 +30,6 @@ describe('minigame registry', () => {
   it('covers the full weighted range across the pool', () => {
     const seen = new Set<string>();
     for (let r = 0; r < 1; r += 0.01) seen.add(pickMinigame(() => r).id);
-    expect(seen).toEqual(new Set(['reaction', 'typing', 'aim']));
+    expect(seen).toEqual(new Set(['reaction', 'typing', 'aim', 'memory', 'tetris', 'platformer']));
   });
 });

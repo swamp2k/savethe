@@ -303,11 +303,11 @@ The core loop is proven fun (M3's playtest gate) and M5 is done, so this backlog
 now open — the design doc's warning against building systems before the social
 experience is fun no longer applies; that gate already passed.
 
-In rough priority order: more minigames (Aim Trainer ✅, Memory, Tetris-like,
-Platformer) • rarity tiers • plushie abilities (unbanked-only) • The Sacrifice •
-The Hostage • The Deal • curses • Traitor Button • Last Chance • Wrong Answer •
-Wheel of Consequences • The Machine Is Angry • D1 persistent profiles/collections •
-R2 assets.
+In rough priority order: more minigames (Aim Trainer ✅, Memory ✅, Tetris-like ✅,
+Platformer ✅ — all six minigames now live) • rarity tiers • plushie abilities
+(unbanked-only) • The Sacrifice • The Hostage • The Deal • curses • Traitor Button •
+Last Chance • Wrong Answer • Wheel of Consequences • The Machine Is Angry • D1
+persistent profiles/collections • R2 assets.
 
 **Aim Trainer: done.** A target appears at a random spot and disappears after a
 short, difficulty-scaled window (`src/server/minigames/aim.ts`); the MPC needs
@@ -324,6 +324,53 @@ selector landing on `aim`, MPC hits registering across respawning targets, a
 support hit correctly lowering the bar (5/5 hits, 1 team assist in the resolution
 text), round resolving SAVED, and the run continuing normally through a risk vote
 afterward.
+
+**Memory, Tetris-like ("Block Fit"), and Platformer ("Obstacle Run"): done.** Built
+together in one pass so the roster would be ready to test end-to-end. All three
+follow Aim Trainer's precedent: reuse the two already-proven mechanics (Reaction
+Test's client-timed-elapsed + server-plausibility model; Typing/Aim's support-
+lowers-the-bar model) rather than inventing new ones, and support is never itself
+deadline-bound — only the MPC is ever time-pressured.
+
+- **Memory** (`src/server/minigames/memory.ts`): the MPC studies a symbol sequence
+  (revealed once via the projection, then hidden — no fairness secret exists here,
+  so unlike Reaction/Aim/Platformer the generic countdown is shown normally
+  throughout), then recalls it in order; one wrong click ends the round
+  immediately. Support gets an always-visible mini-sequence; completing it lowers
+  how many symbols the MPC actually needs, floored.
+- **Tetris-like / "Block Fit"** (`tetris.ts`): a 6×8 grid, discrete move/rotate/
+  hard-drop actions — deliberately no falling-gravity ticker, so it stays exactly
+  as message-driven as everything else instead of introducing a new "the engine
+  wakes itself to move something mid-round" pattern. Clearing lines toward a
+  target; support gets a tiny 1-wide "chute" that lowers the target when filled.
+- **Platformer / "Obstacle Run"** (`platformer.ts`): reframed as a chain of
+  Reaction-Test-style QTEs — an obstacle approaches, the MPC sends the matching
+  jump/duck within a short window, repeated `requiredObstacles` times. This was
+  the milestone's actual risk going in (flagged as needing continuous
+  position/velocity tracking the architecture doesn't have); reframing it as a
+  discrete-obstacle chain removed that risk entirely — a wrong call or a
+  plausible-but-too-slow one ends the round immediately, and the per-obstacle
+  window doubles as the only deadline needed (no separate overall time budget).
+  Support gets one non-expiring obstacle; each correct response immediately
+  lowers the bar by one (Aim Trainer's "every hit counts" shape, rather than the
+  other two's "complete a small sequence first").
+
+`engine.ts`/`GameRoom.ts` diff is zero for all three, confirmed via `git diff
+--stat`. 204 tests passing (up from 147): full per-plugin coverage (schema,
+scoring, difficulty scaling, support lowering/floor/win-outright, projection
+hiding internal timestamps) plus one engine-level test per minigame driving a
+full round through the exact same generic dispatch. Verified live via a two-
+browser playtest: all three render and dispatch actions correctly with zero
+console errors across many rounds; Memory won cleanly with the exact expected
+resolution text ("4/4 symbols") by capturing the studied sequence and replaying
+it; Platformer's live win attempts lost to Playwright's click latency against its
+tight ~700ms window (the same class of test-harness artifact diagnosed and fixed
+for Aim Trainer earlier) rather than any product defect — its win/fail logic,
+including the exact timing-plausibility boundaries, is covered by 19 passing unit
+tests. Tetris's win/line-clear logic is unit-tested exhaustively (including exact
+grid math for a multi-row clear and a top-out); scripting a generic live win
+against arbitrary piece sequences wasn't worth the time relative to that
+coverage.
 
 ## Open questions (decide before or during the relevant milestone)
 

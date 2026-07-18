@@ -1080,6 +1080,144 @@ h3,
   }
 }
 
+/* --- Memory --- */
+.memory-sequence {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0;
+}
+
+.memory-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: var(--radius-small);
+  background: var(--bg-inset);
+  font-size: 1.4rem;
+}
+
+.memory-tile--blank {
+  color: var(--muted);
+}
+
+.memory-tile--done {
+  background: rgba(74, 222, 128, 0.18);
+}
+
+.memory-pad {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.memory-pad__btn {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  border: 2px solid var(--bg-panel-edge);
+  background: var(--bg-inset);
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.memory-pad__btn:hover {
+  transform: scale(1.1);
+}
+
+.memory-pad__btn:active {
+  transform: scale(0.9);
+}
+
+/* --- Tetris-like (Block Fit) --- */
+.tetris-grid {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  max-width: 220px;
+  margin: 0 auto;
+  padding: 6px;
+  border-radius: var(--radius-small);
+  background: var(--bg-inset);
+}
+
+.tetris-cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tetris-cell--locked {
+  background: var(--accent-2);
+}
+
+.tetris-cell--active {
+  background: var(--accent);
+}
+
+.tetris-chute {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+  width: 2.6rem;
+  margin: 0 auto;
+  padding: 6px;
+  border-radius: var(--radius-small);
+  background: var(--bg-inset);
+}
+
+.tetris-chute .tetris-cell {
+  width: 100%;
+}
+
+/* --- Platformer (Obstacle Run) --- */
+.platformer-lane {
+  position: relative;
+  width: 100%;
+  max-width: 260px;
+  height: 90px;
+  margin: 0 auto;
+  border-radius: var(--radius-small);
+  background: var(--bg-inset);
+  border-bottom: 3px solid var(--bg-panel-edge);
+  overflow: hidden;
+}
+
+.platformer-obstacle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2.6rem;
+  animation-name: platformer-approach;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.platformer-obstacle--static {
+  animation: none;
+}
+
+@keyframes platformer-approach {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0.4;
+  }
+  85% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.3);
+    opacity: 0.6;
+  }
+}
+
 .btn--bank {
   background: linear-gradient(135deg, #4ade80, #22c55e);
   color: #06301b;
