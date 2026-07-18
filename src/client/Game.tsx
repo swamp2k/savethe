@@ -31,8 +31,8 @@ function Hud({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf:
           Leave
         </button>
       </div>
-      <Shelf label="Trophy shelf" plushies={view.trophies} empty="Nothing banked yet" />
-      {view.unbanked.length > 0 && <Shelf label="At risk" plushies={view.unbanked} danger />}
+      <Shelf label="🏆 Trophy shelf" plushies={view.trophies} empty="Nothing banked yet — go rescue someone!" big />
+      {view.unbanked.length > 0 && <Shelf label="😰 At risk" plushies={view.unbanked} danger />}
     </div>
   );
 }
@@ -42,20 +42,26 @@ function Shelf({
   plushies,
   empty,
   danger,
+  big,
 }: {
   label: string;
   plushies: Plushie[];
   empty?: string;
   danger?: boolean;
+  big?: boolean;
 }) {
   return (
-    <div className={`shelf ${danger ? 'shelf--danger' : ''}`}>
-      <span className="shelf__label">{label}</span>
+    <div className={`shelf ${danger ? 'shelf--danger' : ''} ${big ? 'shelf--big' : ''}`}>
+      <span className="shelf__label">
+        {label}
+        {big && plushies.length > 0 && <span className="shelf__count">{plushies.length}</span>}
+      </span>
       <div className="shelf__items">
         {plushies.length === 0 && empty && <span className="shelf__empty">{empty}</span>}
         {plushies.map((p) => (
           <span key={p.id} className="shelf__item" title={p.name}>
-            {p.emoji}
+            <span className="shelf__item-emoji">{p.emoji}</span>
+            {big && <span className="shelf__item-name">{p.name}</span>}
           </span>
         ))}
       </div>
@@ -292,7 +298,7 @@ function RunOver({ view }: { view: GameView }) {
           : ''}
       </p>
       {summary && summary.plushies.length > 0 && (
-        <Shelf label={banked ? 'Banked' : 'Lost'} plushies={summary.plushies} danger={!banked} />
+        <Shelf label={banked ? '🎉 Banked' : '💔 Lost'} plushies={summary.plushies} danger={!banked} big />
       )}
       <p className="hint center">A fresh run starts in a moment…</p>
     </div>
