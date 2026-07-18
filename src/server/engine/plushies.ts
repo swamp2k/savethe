@@ -5,17 +5,37 @@ interface Species {
   emoji: string;
 }
 
+// The first block all have 3D trophy models (Kenney Cube Pets — see
+// public/models/); the last few are emoji-only cuties kept for variety.
 const SPECIES: Species[] = [
   { species: 'bear', emoji: '🐻' },
+  { species: 'beaver', emoji: '🦫' },
+  { species: 'bee', emoji: '🐝' },
   { species: 'bunny', emoji: '🐰' },
+  { species: 'cat', emoji: '🐱' },
+  { species: 'caterpillar', emoji: '🐛' },
+  { species: 'cow', emoji: '🐮' },
+  { species: 'crab', emoji: '🦀' },
+  { species: 'deer', emoji: '🦌' },
+  { species: 'dog', emoji: '🐶' },
+  { species: 'duck', emoji: '🐤' },
+  { species: 'elephant', emoji: '🐘' },
+  { species: 'fish', emoji: '🐟' },
+  { species: 'fox', emoji: '🦊' },
+  { species: 'giraffe', emoji: '🦒' },
+  { species: 'hog', emoji: '🐗' },
+  { species: 'koala', emoji: '🐨' },
+  { species: 'lion', emoji: '🦁' },
+  { species: 'monkey', emoji: '🐵' },
+  { species: 'panda', emoji: '🐼' },
+  { species: 'parrot', emoji: '🦜' },
   { species: 'penguin', emoji: '🐧' },
+  { species: 'pig', emoji: '🐷' },
+  { species: 'tiger', emoji: '🐯' },
   { species: 'frog', emoji: '🐸' },
   { species: 'turtle', emoji: '🐢' },
-  { species: 'cat', emoji: '🐱' },
   { species: 'octopus', emoji: '🐙' },
-  { species: 'capybara', emoji: '🦫' },
   { species: 'unicorn', emoji: '🦄' },
-  { species: 'duck', emoji: '🐤' },
 ];
 
 // Silly default names. In M3 the MPC gets to (re)name their rescue.

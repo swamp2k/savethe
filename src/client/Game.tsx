@@ -2,7 +2,6 @@ import type { Connection } from './useGameConnection';
 import type { GameView, Plushie } from '../shared/game';
 import { MIN_PLAYERS, MAX_PLAYERS } from '../shared/constants';
 import { useCountdown } from './useCountdown';
-import { PlushieStage } from './PlushieStage';
 import { PlushieShowcase } from './PlushieShowcase';
 import { getMinigameUI } from './minigames/registry';
 
@@ -163,7 +162,7 @@ function MpcVoting({
     <div className="panel">
       <Timer deadline={view.deadline} />
       <h2 className="panel__title">Who do we trust?</h2>
-      <PlushieStage plushie={view.currentPlushie} mood="😟" />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" />
       <p className="hint center">Vote for the MPC — the challenge is revealed after.</p>
       <div className="vote-grid">
         {view.eligibleIds.map((id) => {
@@ -192,7 +191,7 @@ function MpcSelected({ view, nameOf }: { view: GameView; nameOf: (id: string | n
       <Timer deadline={view.deadline} />
       <div className="big-reveal">{you ? 'You are the MPC!' : `${nameOf(view.mpcId)} is the MPC`}</div>
       <p className="hint">{you ? 'The whole group is watching you.' : 'May the odds be ever in their favour.'}</p>
-      <PlushieStage plushie={view.currentPlushie} mood="😟" />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" />
     </div>
   );
 }
@@ -206,7 +205,7 @@ function ChallengeIntro({ view, nameOf }: { view: GameView; nameOf: (id: string 
       <p className="hint">
         {view.mpcId === view.youId ? 'Get ready — you are up.' : `${nameOf(view.mpcId)} is up. Get ready to help.`}
       </p>
-      <PlushieStage plushie={view.currentPlushie} mood="😨" />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😨" animation="idle" />
     </div>
   );
 }
@@ -227,7 +226,7 @@ function Challenge({
       {MinigameUI ? (
         <MinigameUI conn={conn} view={view} nameOf={nameOf} />
       ) : (
-        <PlushieStage plushie={view.currentPlushie} mood="😨" />
+        <PlushieShowcase plushie={view.currentPlushie} mood="😨" animation="idle" />
       )}
     </div>
   );
@@ -251,11 +250,11 @@ function Resolution({
       <div className={`big-reveal ${outcome.success ? 'good' : 'bad'}`}>
         {outcome.success ? 'SAVED!' : 'DOOMED'}
       </div>
-      {outcome.success ? (
-        <PlushieShowcase plushie={outcome.plushie} mood="😄" animation="dance" />
-      ) : (
-        <PlushieStage plushie={outcome.plushie} mood="💥" />
-      )}
+      <PlushieShowcase
+        plushie={outcome.plushie}
+        mood={outcome.success ? '😄' : '💥'}
+        animation={outcome.success ? 'dance' : 'gesture-negative'}
+      />
       <p className="hint center">{outcome.headline}</p>
       {outcome.savedBy && <p className="hint center">Rescued by {nameOf(outcome.savedBy)} 🦸</p>}
       {MinigameUI && <MinigameUI conn={conn} view={view} nameOf={nameOf} />}

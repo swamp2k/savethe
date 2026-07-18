@@ -14,10 +14,13 @@ export function PlushieShowcase({
   plushie,
   mood,
   animation,
+  compact,
 }: {
   plushie: Plushie | null;
   mood: string;
   animation: PlushieAnimation;
+  /** Smaller viewer for busy screens (active minigames). */
+  compact?: boolean;
 }) {
   const src = plushie ? modelFor(plushie.species) : undefined;
   const [viewerState, setViewerState] = useState<'loading' | 'ready' | 'failed'>('loading');
@@ -49,7 +52,7 @@ export function PlushieShowcase({
   if (!src || viewerState !== 'ready') return <PlushieStage plushie={plushie} mood={mood} />;
 
   return (
-    <div className="showcase">
+    <div className={`showcase ${compact ? 'showcase--compact' : ''}`}>
       <model-viewer
         ref={viewerRef}
         className="showcase__viewer"

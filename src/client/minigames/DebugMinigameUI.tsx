@@ -1,4 +1,4 @@
-import { PlushieStage } from '../PlushieStage';
+import { PlushieShowcase } from '../PlushieShowcase';
 import type { MinigameUIComponent } from './types';
 
 interface DebugView {
@@ -23,7 +23,7 @@ export const DebugMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) => 
 
   return (
     <>
-      <PlushieStage plushie={view.currentPlushie} mood="😨" />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😨" animation="idle" compact />
 
       {mg.role === 'mpc' && (
         <div className="actions">

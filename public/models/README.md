@@ -15,6 +15,7 @@ To add one:
    (`idle`, `dance`, `walk`, `run`, `eat`, …), check what `PlushieShowcase`
    requests — an unknown clip name means the model just holds its base pose.
 
-Current models are from [Kenney — Cube Pets](https://kenney.nl/assets/cube-pets)
-(CC0), with the colormap embedded. Species mapping: bear → polar bear,
-duck → chick; bunny/penguin/cat are direct.
+Current models are the full [Kenney — Cube Pets](https://kenney.nl/assets/cube-pets)
+pack (CC0), with the colormap embedded. Species mapping is 1:1 by name except
+bear → polar bear and duck → chick. Species without a model (frog, turtle,
+octopus, unicorn) intentionally stay emoji-only.

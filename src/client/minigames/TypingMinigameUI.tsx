@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { PlushieStage } from '../PlushieStage';
+import { PlushieShowcase } from '../PlushieShowcase';
 import type { MinigameUIComponent } from './types';
 
 interface TypingView {
@@ -88,7 +88,7 @@ export const TypingMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) =>
   if (mg.role === 'mpc') {
     return (
       <>
-        <PlushieStage plushie={view.currentPlushie} mood="😰" />
+        <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" compact />
         <p className="typing-progress">
           {mg.wordsCorrect} / {mg.wordsRequired} words
         </p>
@@ -113,7 +113,7 @@ export const TypingMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) =>
     const phrase = mg.myPhraseWords ?? [];
     return (
       <>
-        <PlushieStage plushie={view.currentPlushie} mood="😰" />
+        <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" compact />
         <p className="hint">
           Type your phrase to help {nameOf(view.mpcId)}! ({myCompletedCount} completed)
         </p>
@@ -136,7 +136,7 @@ export const TypingMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) =>
 
   return (
     <>
-      <PlushieStage plushie={view.currentPlushie} mood="😰" />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" compact />
       <p className="typing-progress">
         {mg.wordsCorrect} / {mg.wordsRequired} words
       </p>

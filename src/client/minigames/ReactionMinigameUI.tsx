@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { PlushieStage } from '../PlushieStage';
+import { PlushieShowcase } from '../PlushieShowcase';
 import type { MinigameUIProps, MinigameUIComponent } from './types';
 
 type Stage = 'mpc_ready' | 'mpc_waiting' | 'mpc_go' | 'support_waiting' | 'support_go';
@@ -84,7 +84,7 @@ export const ReactionMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) 
 
   return (
     <>
-      <PlushieStage plushie={view.currentPlushie} mood={MOOD_FOR_STAGE[mg.stage]} />
+      <PlushieShowcase plushie={view.currentPlushie} mood={MOOD_FOR_STAGE[mg.stage]} animation="idle" compact />
 
       {mg.role === 'mpc' && mpcTurn && (
         <SignalLight

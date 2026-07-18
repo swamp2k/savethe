@@ -6,10 +6,42 @@
  * Adding an animal: drop `<species>.glb` into public/models/ (self-contained,
  * textures embedded — see public/models/README.md) and list the species here.
  */
-const MODELED_SPECIES = new Set(['bear', 'bunny', 'penguin', 'cat', 'duck']);
+const MODELED_SPECIES = new Set([
+  'bear',
+  'beaver',
+  'bee',
+  'bunny',
+  'cat',
+  'caterpillar',
+  'cow',
+  'crab',
+  'deer',
+  'dog',
+  'duck',
+  'elephant',
+  'fish',
+  'fox',
+  'giraffe',
+  'hog',
+  'koala',
+  'lion',
+  'monkey',
+  'panda',
+  'parrot',
+  'penguin',
+  'pig',
+  'tiger',
+]);
 
 /** Animation clip names present in the Kenney Cube Pets rigs. */
-export type PlushieAnimation = 'idle' | 'dance' | 'walk' | 'run' | 'eat';
+export type PlushieAnimation =
+  | 'idle'
+  | 'dance'
+  | 'walk'
+  | 'run'
+  | 'eat'
+  | 'gesture-positive'
+  | 'gesture-negative';
 
 export function modelFor(species: string): string | undefined {
   return MODELED_SPECIES.has(species) ? `/models/${species}.glb` : undefined;
