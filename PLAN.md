@@ -8,12 +8,14 @@ bank (safe) or risk (harder round, better reward).
 This plan is the agreed roadmap. Work top to bottom. Each milestone ends with explicit
 exit criteria — do not start the next milestone until they pass.
 
-**Status: M0–M4 built and deployed, M3 playtest gate cleared.** Scaffold,
+**Status: M0–M5 built and deployed, M3 playtest gate cleared.** Scaffold,
 rooms/identity, the full round engine, Reaction Test, and Typing Challenge are all
 live, with weighted random selection between them. A real playtest happened with 2
 players (this plan originally called for 3+; the user confirmed 2-person testing is
 sufficient for their purposes and signed off) — the core loop held up and it worked.
-Go for M5.
+M5 (stakes screen, second destruction machine, hardening, sound effects, spectator
+emotes) is done; mobile layout and custom domain deploy were explicitly deferred by
+the user rather than blocking M5. Go for Phase 2 mechanics.
 
 ---
 
@@ -253,7 +255,8 @@ lowered the requirement and won the round, and the word-level visual feedback
 explanation; complete flows verified on desktop + phone; no console errors; all suites
 green.
 
-**Status:** mostly done; two items intentionally deferred (below).
+**Status: Done.** Two items — mobile layout pass and custom domain deploy — were
+explicitly deferred by the user rather than blocking M5; see below.
 
 - Juice pass: done, including the two pieces that were missing when this status was
   first written (sound effects, spectator emotes — caught during an M5 audit,
