@@ -42,7 +42,7 @@ setup that connects the Worker to this GitHub repo.
 
 ## Status
 
-**Milestones 0–3 built and deployed.**
+**Milestones 0–4 built and deployed.**
 
 - **M0/M1:** scaffold + deploy pipeline; 3-character room codes, typed & validated
   WebSocket protocol, connection-derived identity with reconnect
@@ -57,7 +57,13 @@ setup that connects the Worker to this GitHub repo.
   plausibility validation. Miss it and the whole support team gets one shared
   emergency-rescue window. Hydraulic-press presentation with escalating plushie mood,
   and a resolution-time stat reveal of everyone's reaction times.
+- **M4:** the Typing Challenge — MPC types a passage toward a target word count while
+  support players work through a repeating queue of short phrases, each completion
+  lowering the MPC's requirement. Proves the plugin architecture actually holds up:
+  `engine.ts` has a zero-line diff for this entire milestone. Weighted random
+  selection between both real minigames now drives the challenge reveal.
 
 **M3's exit criteria has one piece left that only a human can do: a real 3+ person
-playtest.** See PLAN.md's Milestone 3 section for what's built vs. still open before
-starting M4.
+playtest.** M4 proceeded without it (flagged, not silently skipped) — it still needs
+to happen before M5 polish work locks in a direction. See PLAN.md's Milestone 3
+section for what's built vs. still open.

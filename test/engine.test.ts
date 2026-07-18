@@ -38,12 +38,15 @@ function started(n: number, now = 1000): GameState {
 }
 
 /** Drive from any post-start phase up to CHALLENGE_ACTIVE, resolving a vote by
- *  deadline if one is open. The only minigame the production registry ever
- *  selects is the Reaction Test, so this always lands in its `mpc_ready` stage. */
-function toActive(state: GameState): GameState {
+ *  deadline if one is open. `random` defaults to 0, which always lands on the
+ *  first entry in the weighted selectable pool (the Reaction Test) — most of
+ *  this file exercises that game specifically via its `mpc_ready` stage. */
+function toActive(state: GameState, minigameRandom = 0): GameState {
   let s = state;
   if (s.phase === 'mpc_voting') s = apply(s, { type: 'tick' }, s.deadline! + 1);
-  if (s.phase === 'mpc_selected') s = apply(s, { type: 'tick' }, s.deadline! + 1);
+  // The minigame is picked on this specific transition (mpc_selected ->
+  // challenge_intro); only this tick needs the non-default random.
+  if (s.phase === 'mpc_selected') s = apply(s, { type: 'tick' }, s.deadline! + 1, minigameRandom);
   if (s.phase === 'challenge_intro') s = apply(s, { type: 'tick' }, s.deadline! + 1);
   expect(s.phase).toBe('challenge_active');
   return s;
@@ -217,6 +220,48 @@ describe('the three round outcomes', () => {
     expect(s.phase).toBe('round_resolution');
     expect(s.outcome?.success).toBe(false);
     expect(s.unbanked).toHaveLength(0);
+  });
+});
+
+describe('minigame selection (M4 exit criteria: both minigames playable, no engine changes)', () => {
+  it('can select and fully play the Typing Challenge through the exact same generic dispatch', () => {
+    // random=0.9 lands on the second entry (typing) in the weighted pool.
+    let s = toActive(started(2), 0.9);
+    expect(s.activeMinigameId).toBe('typing');
+
+    const mg = projectFor(s, s.mpcId!).minigame;
+    expect(mg?.id).toBe('typing');
+    const passageWords = (mg!.view as { passageWords: string[] }).passageWords;
+
+    s = apply(
+      s,
+      { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'type', text: `${passageWords.join(' ')} ` } },
+      s.deadline! - 1000, // comfortably before the challenge's own deadline
+    );
+    expect(s.phase).toBe('round_resolution');
+    expect(s.outcome?.success).toBe(true);
+    expect(s.unbanked).toHaveLength(1);
+  });
+
+  it('a support word-burst contributes toward a Typing round exactly like any other minigame action', () => {
+    let s = toActive(started(3), 0.9);
+    expect(s.activeMinigameId).toBe('typing');
+    const mpc = s.mpcId!;
+    const supporter = ['p1', 'p2', 'p3'].find((id) => id !== mpc)!;
+
+    const supportMg = projectFor(s, supporter).minigame!.view as { myPhraseWords: string[] };
+    s = apply(
+      s,
+      {
+        type: 'minigameAction',
+        playerId: supporter,
+        payload: { kind: 'type', text: `${supportMg.myPhraseWords.join(' ')} ` },
+      },
+      s.deadline! - 5000,
+    );
+    const afterSupport = projectFor(s, mpc).minigame!.view as { totalSupportCompletions: number };
+    expect(afterSupport.totalSupportCompletions).toBe(1);
+    expect(s.phase).toBe('challenge_active'); // one support burst alone doesn't finish the MPC's passage
   });
 });
 

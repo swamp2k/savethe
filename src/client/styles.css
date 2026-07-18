@@ -563,6 +563,64 @@ body {
   font-weight: 700;
 }
 
+/* --- Typing Challenge --- */
+.typing-progress {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-2);
+  margin: 0;
+}
+
+.typing-passage {
+  font-size: 1.3rem;
+  line-height: 1.9;
+  text-align: center;
+  margin: 0;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.typing-word {
+  display: inline-block;
+  padding: 0 0.15rem;
+  border-radius: 4px;
+}
+
+.typing-word--correct {
+  color: var(--ok);
+}
+
+.typing-word--active-ok {
+  background: rgba(255, 210, 63, 0.25);
+  color: var(--accent-2);
+}
+
+.typing-word--active-bad {
+  background: rgba(255, 107, 107, 0.3);
+  color: var(--danger);
+  text-decoration: underline wavy var(--danger);
+}
+
+.typing-word--pending {
+  color: var(--muted);
+}
+
+.typing-input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font-size: 1.2rem;
+  font-family: inherit;
+}
+
+.typing-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .btn--bank {
   background: linear-gradient(135deg, #4ade80, #22c55e);
   color: #06301b;
