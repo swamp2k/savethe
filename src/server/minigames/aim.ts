@@ -70,8 +70,9 @@ const TARGET_LIFETIME_STEP_MS = 60;
 const TARGET_LIFETIME_FLOOR_MS = 650;
 
 /** Fixed rather than difficulty-scaled: the two knobs above already carry
- *  the difficulty curve. */
-const TIME_BUDGET_MS = 20_000;
+ *  the difficulty curve. Tight enough that the fuse visibly burns — 6 hits
+ *  at ~1.2s target lifetimes fits comfortably, but there's no idle slack. */
+const TIME_BUDGET_MS = 12_000;
 
 const SUPPORT_REDUCTION_PER_HIT = 1;
 const REQUIRED_HITS_FLOOR_RATIO = 0.4;

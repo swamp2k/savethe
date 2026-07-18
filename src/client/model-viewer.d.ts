@@ -17,6 +17,7 @@ declare module 'react' {
         'disable-tap'?: boolean;
         'camera-controls'?: boolean;
         'auto-rotate'?: boolean;
+        loading?: 'auto' | 'lazy' | 'eager';
       };
     }
   }

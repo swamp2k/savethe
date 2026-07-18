@@ -46,3 +46,10 @@ export type PlushieAnimation =
 export function modelFor(species: string): string | undefined {
   return MODELED_SPECIES.has(species) ? `/models/${species}.glb` : undefined;
 }
+
+/** A random species that definitely has a model — for purely cosmetic
+ *  client-side casting (e.g. Obstacle Run's runner). */
+export function randomModeledSpecies(): string {
+  const all = [...MODELED_SPECIES];
+  return all[Math.floor(Math.random() * all.length)];
+}

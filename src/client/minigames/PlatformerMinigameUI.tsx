@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PlushieShowcase } from '../PlushieShowcase';
+import { modelFor, randomModeledSpecies } from '../models';
 import { playSound } from '../sound';
 import type { MinigameUIComponent } from './types';
 
@@ -24,6 +25,65 @@ function Legend() {
     <p className="hint center platformer-legend">
       🪨 rock → <strong>JUMP</strong> over it &nbsp;·&nbsp; 🪵 log → <strong>DUCK</strong> under it
     </p>
+  );
+}
+
+/**
+ * The runner: a random plushie GLB sprinting in place via its built-in `run`
+ * clip (every Cube Pets rig has one), cast fresh each round — purely cosmetic
+ * and client-side, so different players may see different animals. Pressing
+ * JUMP hops the whole model in an arc; DUCK squashes it flat from the feet
+ * up. The emoji stands in while the viewer loads or for a failed model.
+ */
+function Runner({ action, onActionDone }: { action: 'jump' | 'duck' | null; onActionDone: () => void }) {
+  const [species] = useState(randomModeledSpecies);
+  const src = modelFor(species);
+  const [viewerState, setViewerState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const viewerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!src) return;
+    let alive = true;
+    import('@google/model-viewer').then(
+      () => alive && setViewerState('ready'),
+      () => alive && setViewerState('failed'),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [src]);
+
+  useEffect(() => {
+    const el = viewerRef.current;
+    if (!el) return;
+    const onError = () => setViewerState('failed');
+    el.addEventListener('error', onError);
+    return () => el.removeEventListener('error', onError);
+  }, [viewerState]);
+
+  const actionClass =
+    action === 'jump' ? 'platformer-runner--jump' : action === 'duck' ? 'platformer-runner--duck' : '';
+  return (
+    <span className={`platformer-runner ${actionClass}`} onAnimationEnd={onActionDone}>
+      {src && viewerState === 'ready' ? (
+        <model-viewer
+          ref={viewerRef}
+          className="platformer-runner__viewer"
+          src={src}
+          alt="Your runner"
+          autoplay
+          animation-name="run"
+          loading="eager"
+          camera-orbit="-90deg 80deg 105%"
+          shadow-intensity="0.6"
+          interaction-prompt="none"
+          disable-zoom
+          disable-tap
+        />
+      ) : (
+        <span className="platformer-runner__emoji">🏃</span>
+      )}
+    </span>
   );
 }
 
@@ -53,6 +113,11 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
     };
   }, [obstacleId]);
 
+  // The runner acts out whatever the player just pressed (hop or squash),
+  // regardless of whether the server ends up counting it — it's feedback for
+  // the button press, not the verdict.
+  const [runnerAction, setRunnerAction] = useState<'jump' | 'duck' | null>(null);
+
   if (!mg) return null;
 
   if (view.phase === 'round_resolution') {
@@ -67,8 +132,27 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
   const react = (response: 'jump' | 'duck') => {
     const elapsedMs = spawnedAtRef.current !== null ? Date.now() - spawnedAtRef.current : 0;
     conn.minigameAction({ kind: 'react', response, elapsedMs });
+    setRunnerAction(response);
     playSound('click');
   };
+
+  const lane = (obstacle: React.ReactNode) => (
+    <div className="platformer-lane">
+      <Runner action={runnerAction} onActionDone={() => setRunnerAction(null)} />
+      {obstacle}
+    </div>
+  );
+
+  const buttons = (
+    <div className="actions__row">
+      <button className="btn btn--primary" onClick={() => react('jump')}>
+        {OBSTACLE_LABEL.jump}
+      </button>
+      <button className="btn btn--primary" onClick={() => react('duck')}>
+        {OBSTACLE_LABEL.duck}
+      </button>
+    </div>
+  );
 
   if (mg.role === 'mpc') {
     return (
@@ -77,23 +161,15 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
           {mg.obstaclesCleared} / {mg.requiredObstacles} cleared
         </p>
         <Legend />
-        <div className="platformer-lane">
-          <span className="platformer-runner">🏃</span>
-          {mg.obstacleType && (
+        {lane(
+          mg.obstacleType && (
             <span key={obstacleId} className="platformer-obstacle" style={{ animationDuration: `${mg.obstacleWindowMs}ms` }}>
               {OBSTACLE_EMOJI[mg.obstacleType]}
             </span>
-          )}
-        </div>
+          ),
+        )}
         <p className="hint center">Hit the right button before it reaches you!</p>
-        <div className="actions__row">
-          <button className="btn btn--primary" onClick={() => react('jump')}>
-            {OBSTACLE_LABEL.jump}
-          </button>
-          <button className="btn btn--primary" onClick={() => react('duck')}>
-            {OBSTACLE_LABEL.duck}
-          </button>
-        </div>
+        {buttons}
       </>
     );
   }
@@ -106,18 +182,12 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
           Clear your own obstacle to shorten {nameOf(view.mpcId)}&rsquo;s run! ({mg.supportClears} cleared)
         </p>
         <Legend />
-        <div className="platformer-lane">
-          <span className="platformer-runner">🏃</span>
-          {mg.myObstacleType && <span className="platformer-obstacle platformer-obstacle--static">{OBSTACLE_EMOJI[mg.myObstacleType]}</span>}
-        </div>
-        <div className="actions__row">
-          <button className="btn btn--primary" onClick={() => react('jump')}>
-            {OBSTACLE_LABEL.jump}
-          </button>
-          <button className="btn btn--primary" onClick={() => react('duck')}>
-            {OBSTACLE_LABEL.duck}
-          </button>
-        </div>
+        {lane(
+          mg.myObstacleType && (
+            <span className="platformer-obstacle platformer-obstacle--static">{OBSTACLE_EMOJI[mg.myObstacleType]}</span>
+          ),
+        )}
+        {buttons}
       </>
     );
   }
