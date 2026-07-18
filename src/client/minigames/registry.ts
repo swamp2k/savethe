@@ -1,4 +1,5 @@
 import type { MinigameUIComponent } from './types';
+import { AimMinigameUI } from './AimMinigameUI';
 import { DebugMinigameUI } from './DebugMinigameUI';
 import { ReactionMinigameUI } from './ReactionMinigameUI';
 import { TypingMinigameUI } from './TypingMinigameUI';
@@ -8,6 +9,7 @@ const REGISTRY: Record<string, MinigameUIComponent> = {
   debug: DebugMinigameUI,
   reaction: ReactionMinigameUI,
   typing: TypingMinigameUI,
+  aim: AimMinigameUI,
 };
 
 export function getMinigameUI(id: string): MinigameUIComponent | undefined {

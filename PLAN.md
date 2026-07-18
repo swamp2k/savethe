@@ -297,15 +297,33 @@ explicitly deferred by the user rather than blocking M5; see below.
 
 ---
 
-## Deferred (Phase 2 backlog — do not build until the core loop is proven fun)
+## Phase 2 backlog
 
-In rough priority order: more minigames (Aim Trainer, Memory, Tetris-like, Platformer) •
-rarity tiers • plushie abilities (unbanked-only) • The Sacrifice • The Hostage •
-The Deal • curses • Traitor Button • Last Chance • Wrong Answer • Wheel of
-Consequences • The Machine Is Angry • D1 persistent profiles/collections • R2 assets.
+The core loop is proven fun (M3's playtest gate) and M5 is done, so this backlog is
+now open — the design doc's warning against building systems before the social
+experience is fun no longer applies; that gate already passed.
 
-The design doc's own warning stands: the dangerous temptation is building systems
-before the basic social experience is fun. M3's playtest gate exists for this reason.
+In rough priority order: more minigames (Aim Trainer ✅, Memory, Tetris-like,
+Platformer) • rarity tiers • plushie abilities (unbanked-only) • The Sacrifice •
+The Hostage • The Deal • curses • Traitor Button • Last Chance • Wrong Answer •
+Wheel of Consequences • The Machine Is Angry • D1 persistent profiles/collections •
+R2 assets.
+
+**Aim Trainer: done.** A target appears at a random spot and disappears after a
+short, difficulty-scaled window (`src/server/minigames/aim.ts`); the MPC needs
+`requiredHits` clicks within a time budget. Deliberately reuses two already-proven
+mechanics instead of inventing a third: the MPC side is Reaction Test's client-
+measured-elapsed-time + server-plausibility-check model, the support side is Typing
+Challenge's concurrent-support-lowers-the-bar model (support gets a non-expiring
+target; every hit lowers the MPC's bar, floored, can win the round outright).
+`engine.ts`/`GameRoom.ts` diff is zero, confirmed via `git diff --stat`, same
+exit-criteria check M4 held itself to. 147 tests passing (up from 126), including
+a full round driven through `aim` via the exact same generic dispatch used for the
+other two minigames. Verified live: two-browser playtest with the weighted
+selector landing on `aim`, MPC hits registering across respawning targets, a
+support hit correctly lowering the bar (5/5 hits, 1 team assist in the resolution
+text), round resolving SAVED, and the run continuing normally through a risk vote
+afterward.
 
 ## Open questions (decide before or during the relevant milestone)
 

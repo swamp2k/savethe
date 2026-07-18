@@ -234,8 +234,9 @@ describe('the three round outcomes', () => {
 
 describe('minigame selection (M4 exit criteria: both minigames playable, no engine changes)', () => {
   it('can select and fully play the Typing Challenge through the exact same generic dispatch', () => {
-    // random=0.9 lands on the second entry (typing) in the weighted pool.
-    let s = toActive(started(2), 0.9);
+    // Three equal-weight entries now (reaction, typing, aim); random=0.5 lands
+    // on the middle one (typing).
+    let s = toActive(started(2), 0.5);
     expect(s.activeMinigameId).toBe('typing');
 
     const mg = projectFor(s, s.mpcId!).minigame;
@@ -253,7 +254,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
   });
 
   it('a support word-burst contributes toward a Typing round exactly like any other minigame action', () => {
-    let s = toActive(started(3), 0.9);
+    let s = toActive(started(3), 0.5);
     expect(s.activeMinigameId).toBe('typing');
     const mpc = s.mpcId!;
     const supporter = ['p1', 'p2', 'p3'].find((id) => id !== mpc)!;
@@ -271,6 +272,27 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     const afterSupport = projectFor(s, mpc).minigame!.view as { totalSupportCompletions: number };
     expect(afterSupport.totalSupportCompletions).toBe(1);
     expect(s.phase).toBe('challenge_active'); // one support burst alone doesn't finish the MPC's passage
+  });
+
+  it('can select and fully play Aim Trainer through the exact same generic dispatch', () => {
+    // Three equal-weight entries (reaction, typing, aim); random=0.9 lands on
+    // the last one (aim).
+    let s = toActive(started(2), 0.9);
+    expect(s.activeMinigameId).toBe('aim');
+
+    const required = (projectFor(s, s.mpcId!).minigame!.view as { requiredHits: number }).requiredHits;
+    for (let i = 0; i < required; i++) {
+      const mg = projectFor(s, s.mpcId!).minigame!.view as { targetId: number };
+      const spawnAt = s.deadline! - 1000; // difficulty 1 -> hitThresholdMs 1000
+      s = apply(
+        s,
+        { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'hit', targetId: mg.targetId, elapsedMs: 200 } },
+        spawnAt + 200,
+      );
+    }
+    expect(s.phase).toBe('round_resolution');
+    expect(s.outcome?.success).toBe(true);
+    expect(s.unbanked).toHaveLength(1);
   });
 });
 

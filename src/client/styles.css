@@ -1024,6 +1024,62 @@ h3,
   box-shadow: 0 0 0 4px rgba(255, 92, 138, 0.18);
 }
 
+/* --- Aim Trainer --- */
+.aim-range {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  height: 180px;
+  margin: 0 auto;
+  border-radius: var(--radius-small);
+  background: var(--bg-inset);
+  border: 2px dashed var(--bg-panel-edge);
+  overflow: hidden;
+}
+
+.aim-target {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  border: none;
+  background: radial-gradient(circle, var(--accent-soft), var(--accent));
+  font-size: 1.6rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  /* Duration is set inline per-target (hitThresholdMs) so the pop-in/fade
+     visually tracks exactly how long this specific target stays live —
+     the generic countdown is hidden for this minigame (see isDeadlineHidden
+     in aim.ts), so this animation is the only urgency cue. */
+  animation-name: aim-target-life;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes aim-target-life {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+  }
+  10% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
+  }
+  85% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.7);
+    opacity: 0.3;
+  }
+}
+
 .btn--bank {
   background: linear-gradient(135deg, #4ade80, #22c55e);
   color: #06301b;
