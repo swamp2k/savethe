@@ -57,7 +57,7 @@ export const AimMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) => {
     if (targetId === undefined) return;
     const elapsedMs = spawnedAtRef.current !== null ? Date.now() - spawnedAtRef.current : 0;
     conn.minigameAction({ kind: 'hit', targetId, elapsedMs });
-    playSound('click');
+    playSound('shot');
   };
 
   if (mg.role === 'mpc' || mg.role === 'support') {

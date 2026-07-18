@@ -8,13 +8,14 @@ import { useEffect, useState } from 'react';
  * the Hud's toggle re-renders without needing a context provider for one bool.
  */
 
-type SoundKey = 'click' | 'success' | 'failure' | 'tick';
+type SoundKey = 'click' | 'success' | 'failure' | 'tick' | 'shot';
 
 const SOUNDS: Record<SoundKey, { src: string; volume: number }> = {
   click: { src: '/sounds/click.ogg', volume: 0.5 },
   success: { src: '/sounds/success.ogg', volume: 0.6 },
   failure: { src: '/sounds/failure.ogg', volume: 0.6 },
   tick: { src: '/sounds/tick.ogg', volume: 0.35 },
+  shot: { src: '/sounds/shot.wav', volume: 0.45 },
 };
 
 const STORAGE_KEY = 'savethe.muted';

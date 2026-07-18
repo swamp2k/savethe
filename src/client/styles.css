@@ -88,6 +88,15 @@ h3,
   padding: 2.25rem 1.25rem 4rem;
 }
 
+/* Desktop gets the room it actually has: the phone-width column made
+   pointer-skill arenas (Aim Trainer, Obstacle Run) cramped. Content inside
+   panels stays centered, so nothing else needs per-phase overrides. */
+@media (min-width: 720px) {
+  .app {
+    max-width: 860px;
+  }
+}
+
 .app__header {
   text-align: center;
   margin-bottom: 1.75rem;
@@ -1028,8 +1037,7 @@ h3,
 .aim-range {
   position: relative;
   width: 100%;
-  max-width: 320px;
-  height: 180px;
+  height: clamp(220px, 45vh, 440px);
   margin: 0 auto;
   border-radius: var(--radius-small);
   background: var(--bg-inset);
@@ -1040,8 +1048,8 @@ h3,
 .aim-target {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 3rem;
-  height: 3rem;
+  width: 3.5rem;
+  height: 3.5rem;
   border-radius: 999px;
   border: none;
   background: radial-gradient(circle, var(--accent-soft), var(--accent));
@@ -1179,8 +1187,8 @@ h3,
 .platformer-lane {
   position: relative;
   width: 100%;
-  max-width: 260px;
-  height: 90px;
+  max-width: 640px;
+  height: 130px;
   margin: 0 auto;
   border-radius: var(--radius-small);
   background: var(--bg-inset);
@@ -1193,7 +1201,7 @@ h3,
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 2.6rem;
+  font-size: 3.4rem;
   animation-name: platformer-approach;
   animation-timing-function: linear;
   animation-fill-mode: forwards;

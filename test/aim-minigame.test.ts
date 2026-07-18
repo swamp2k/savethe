@@ -93,8 +93,8 @@ describe('aim trainer: MPC hits', () => {
   it('a plausible but too-slow click counts as a miss and still spawns a fresh target', () => {
     const s = fresh();
     const v = view(s, 'mpc');
-    // difficulty 1 -> hitThresholdMs 1000; 1200ms is plausible but over threshold.
-    const clicked = aimGame.handleMpcAction(s, { kind: 'hit', targetId: v.targetId, elapsedMs: 1200 }, ctx(1200));
+    // difficulty 1 -> hitThresholdMs 1200; 1400ms is plausible but over threshold.
+    const clicked = aimGame.handleMpcAction(s, { kind: 'hit', targetId: v.targetId, elapsedMs: 1400 }, ctx(1400));
     const cv = view(clicked, 'mpc');
     expect(cv.hits).toBe(0);
     expect(cv.misses).toBe(1);
@@ -112,9 +112,9 @@ describe('aim trainer: MPC hits', () => {
       hitThresholdMs: number;
     };
     expect(easy.requiredHits).toBe(6);
-    expect(easy.hitThresholdMs).toBe(1000);
+    expect(easy.hitThresholdMs).toBe(1200);
     expect(hard.requiredHits).toBe(12); // capped
-    expect(hard.hitThresholdMs).toBe(550); // floored
+    expect(hard.hitThresholdMs).toBe(650); // floored
   });
 });
 
