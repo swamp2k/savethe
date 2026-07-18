@@ -47,9 +47,12 @@ const actionSchema = z.discriminatedUnion('kind', [
 ]);
 type ReactionAction = z.infer<typeof actionSchema>;
 
-const BASE_MPC_THRESHOLD_MS = 500;
-const MPC_THRESHOLD_STEP_MS = 30;
-const MPC_THRESHOLD_FLOOR_MS = 350;
+const BASE_MPC_THRESHOLD_MS = 250;
+const MPC_THRESHOLD_STEP_MS = 20;
+// Must stay comfortably above MIN_PLAUSIBLE_MS below, or the hardest
+// difficulty tiers would require a reaction the server itself would reject
+// as physiologically impossible — unwinnable by design.
+const MPC_THRESHOLD_FLOOR_MS = 150;
 const SUPPORT_THRESHOLD_MS = 350;
 
 const READY_TIMEOUT_MS = 8_000;

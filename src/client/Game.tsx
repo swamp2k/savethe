@@ -95,7 +95,11 @@ function PhasePanel({
 
 function Timer({ deadline }: { deadline: number | null }) {
   const seconds = useCountdown(deadline);
-  if (seconds === null) return null;
+  // A null deadline here means a minigame is deliberately hiding it (e.g. the
+  // Reaction Test's secret signal window) — every phase that renders a Timer
+  // otherwise always has one. Reserve the same box rather than unmounting it,
+  // or everything below jumps up when the countdown disappears.
+  if (seconds === null) return <div className="timer timer--hidden">&nbsp;</div>;
   return <div className={`timer ${seconds <= 5 ? 'timer--urgent' : ''}`}>{seconds}s</div>;
 }
 

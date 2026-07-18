@@ -62,7 +62,10 @@ export const ReactionMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) 
       {mg.role === 'mpc' && mg.stage === 'mpc_ready' && (
         <div className="actions">
           <p className="hint">Press ready when you&rsquo;re prepared. Then wait for it&hellip;</p>
-          <button className="btn btn--primary" onClick={() => conn.minigameAction({ kind: 'ready' })}>
+          <button
+            className="btn reaction-target reaction-target--ready"
+            onClick={() => conn.minigameAction({ kind: 'ready' })}
+          >
             I&rsquo;M READY
           </button>
         </div>
