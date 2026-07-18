@@ -3,6 +3,7 @@ import type { GameView, Plushie } from '../shared/game';
 import { MIN_PLAYERS, MAX_PLAYERS } from '../shared/constants';
 import { useCountdown } from './useCountdown';
 import { PlushieStage } from './PlushieStage';
+import { PlushieShowcase } from './PlushieShowcase';
 import { getMinigameUI } from './minigames/registry';
 
 export function Game({ conn, view }: { conn: Connection; view: GameView }) {
@@ -250,7 +251,11 @@ function Resolution({
       <div className={`big-reveal ${outcome.success ? 'good' : 'bad'}`}>
         {outcome.success ? 'SAVED!' : 'DOOMED'}
       </div>
-      <PlushieStage plushie={outcome.plushie} mood={outcome.success ? '😄' : '💥'} />
+      {outcome.success ? (
+        <PlushieShowcase plushie={outcome.plushie} mood="😄" animation="dance" />
+      ) : (
+        <PlushieStage plushie={outcome.plushie} mood="💥" />
+      )}
       <p className="hint center">{outcome.headline}</p>
       {outcome.savedBy && <p className="hint center">Rescued by {nameOf(outcome.savedBy)} 🦸</p>}
       {MinigameUI && <MinigameUI conn={conn} view={view} nameOf={nameOf} />}
