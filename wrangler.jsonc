@@ -18,9 +18,11 @@
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
-    // RoomRegistry is a tiny singleton counter; plain (non-SQLite) DO storage
-    // is enough, so it's a `new_classes` entry rather than `new_sqlite_classes`.
-    { "tag": "v2", "new_classes": ["RoomRegistry"] }
+    // This account no longer allows creating legacy KV-backed DO namespaces
+    // (new_classes) — every new class must be new_sqlite_classes now, even a
+    // tiny singleton counter like RoomRegistry. Its own code is unaffected:
+    // ctx.storage.get/put work identically on the SQLite backend.
+    { "tag": "v2", "new_sqlite_classes": ["RoomRegistry"] }
   ],
   "observability": { "enabled": true }
 }

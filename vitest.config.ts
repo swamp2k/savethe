@@ -13,7 +13,7 @@ export default defineWorkersConfig({
           compatibilityDate: '2025-05-01',
           durableObjects: {
             GAME_ROOM: { className: 'GameRoom', useSQLite: true },
-            ROOM_REGISTRY: { className: 'RoomRegistry' },
+            ROOM_REGISTRY: { className: 'RoomRegistry', useSQLite: true },
           },
         },
       },
