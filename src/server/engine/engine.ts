@@ -1,4 +1,4 @@
-import type { GameView, Phase, Plushie, PlayerView, RoundOutcome, RunSummary } from '../../shared/game';
+import type { GameView, Machine, Phase, Plushie, PlayerView, RoundOutcome, RunSummary } from '../../shared/game';
 import { MIN_PLAYERS } from '../../shared/constants';
 import type { MinigameContext, MinigameOutcome } from '../minigames/contract';
 import { getMinigame, pickMinigame } from '../minigames/registry';
@@ -30,6 +30,7 @@ export interface GameState {
   runId: number;
   round: number;
   difficulty: number;
+  machine: Machine;
   deadline: number | null;
   previousMpcId: string | null;
   mpcId: string | null;
@@ -58,6 +59,7 @@ export const DURATIONS = {
   challengeIntro: 4_000,
   resolution: 6_000,
   riskVote: 30_000,
+  stakes: 6_000,
   runEnd: 8_000,
 } as const;
 
@@ -70,6 +72,7 @@ export function initialGameState(): GameState {
     runId: 0,
     round: 0,
     difficulty: 1,
+    machine: 'press',
     deadline: null,
     previousMpcId: null,
     mpcId: null,
@@ -154,6 +157,7 @@ function beginRun(state: GameState, ctx: MinigameContext): GameState {
     runId: state.runId + 1,
     round: 0,
     difficulty: 1,
+    machine: ctx.random() < 0.5 ? 'press' : 'cannon',
     unbanked: [],
     previousMpcId: null,
     mpcId: null,
@@ -162,12 +166,19 @@ function beginRun(state: GameState, ctx: MinigameContext): GameState {
     outcome: null,
     runSummary: null,
   };
-  return beginRound(next, ctx);
+  // Round 1 has nothing at risk yet, so it skips straight to MPC voting
+  // rather than showing a stakes beat (that's reserved for rounds reached
+  // via a RISK vote — see resolveRiskVote).
+  return enterMpcVoting(setupRound(next, ctx), ctx);
 }
 
-function beginRound(state: GameState, ctx: MinigameContext): GameState {
+/** Round-init only: increments round/difficulty, assigns the new plushie,
+ *  resets per-round vote/challenge state. Callers decide what phase follows
+ *  (straight to MPC voting for a run's first round, or a stakes beat first
+ *  for a round reached via RISK). */
+function setupRound(state: GameState, ctx: MinigameContext): GameState {
   const round = state.round + 1;
-  const next: GameState = {
+  return {
     ...state,
     round,
     difficulty: round,
@@ -179,7 +190,10 @@ function beginRound(state: GameState, ctx: MinigameContext): GameState {
     activeMinigameId: null,
     minigameState: null,
   };
-  return enterMpcVoting(next, ctx);
+}
+
+function enterStakes(state: GameState, ctx: MinigameContext): GameState {
+  return { ...state, phase: 'stakes', deadline: ctx.now + DURATIONS.stakes };
 }
 
 function enterMpcVoting(state: GameState, ctx: MinigameContext): GameState {
@@ -338,7 +352,7 @@ function resolveRiskVote(state: GameState, ctx: MinigameContext): GameState {
     else bank += 1;
   }
   // RISK needs a strict majority of votes cast; tie or all-abstain -> BANK.
-  if (risk > bank) return beginRound(state, ctx);
+  if (risk > bank) return enterStakes(setupRound(state, ctx), ctx);
   return enterRunComplete(state, ctx);
 }
 
@@ -384,6 +398,8 @@ function applyTick(state: GameState, ctx: MinigameContext): GameState {
       return state.outcome?.success ? enterRiskVoting(state, ctx) : enterRunFailed(state, ctx);
     case 'risk_voting':
       return resolveRiskVote(state, ctx);
+    case 'stakes':
+      return enterMpcVoting(state, ctx);
     case 'run_complete':
     case 'run_failed':
       return beginRun(state, ctx);
@@ -429,6 +445,7 @@ export function projectFor(state: GameState, viewerId: string): GameView {
     phase: state.phase,
     round: state.round,
     difficulty: state.difficulty,
+    machine: state.machine,
     youId: viewerId,
     hostId: state.hostId,
     players,

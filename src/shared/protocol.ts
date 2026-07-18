@@ -44,6 +44,7 @@ export type ErrorCode =
   | 'already_joined'
   | 'no_such_room'
   | 'room_full'
+  | 'server_busy'
   | 'code_taken'
   | 'unknown_session'
   | 'bad_nickname'

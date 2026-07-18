@@ -84,7 +84,7 @@ export const ReactionMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) 
 
   return (
     <>
-      <PlushieShowcase plushie={view.currentPlushie} mood={MOOD_FOR_STAGE[mg.stage]} animation="idle" compact />
+      <PlushieShowcase plushie={view.currentPlushie} mood={MOOD_FOR_STAGE[mg.stage]} animation="idle" machine={view.machine} compact />
 
       {mg.role === 'mpc' && mpcTurn && (
         <SignalLight

@@ -253,6 +253,38 @@ lowered the requirement and won the round, and the word-level visual feedback
 explanation; complete flows verified on desktop + phone; no console errors; all suites
 green.
 
+**Status:** mostly done; two items intentionally deferred (below), one gap found
+along the way and not yet closed.
+
+- Juice pass: done for transitions/countdowns/party styling (self-hosted fonts,
+  candy palette, trophy shelf as HUD centerpiece, springy animations) and further
+  extended with a 3D showcase — real GLB models with idle/dance/failure clips for 24
+  species, an emoji fallback for the rest. **Not done: sound effects and spectator
+  emotes** (hearts/panic/tomatoes) — the bullet's other two items were never built;
+  this was noticed while auditing M5 status, not part of the current work. Flagging
+  it rather than silently marking the whole bullet complete.
+- Stakes screen: done. A new `stakes` engine phase sits between a RISK vote and the
+  next MPC vote, showing the newly-assigned plushie and the still-unbanked ones at
+  risk before play resumes. Only fires for rounds reached via RISK (a run's first
+  round has nothing at stake yet). Covered by engine tests and verified live via a
+  scripted two-browser playtest.
+- Second destruction machine: done. `press` (🏭 Hydraulic Press) or `cannon` (🚀
+  Cannon Into Space) is chosen once per run (server-side, injected `random`), shown
+  via a persistent Hud chip and the plushie stage/showcase throughout the run;
+  purely cosmetic, no engine or minigame branching. Both variants confirmed live.
+- Hardening: done. Oversized-message rejection and per-connection rate limiting
+  (window-based, state carried on the WebSocket attachment so it survives
+  hibernation); a global room cap enforced via a new singleton `RoomRegistry`
+  Durable Object (`tryReserve`/`release`, reserved on room creation, released on
+  empty-room cleanup); a regression test proving a room resumes correctly if the DO
+  instance is torn down and rebuilt mid-game (GameRoom already kept no
+  authoritative in-memory state — this was verifying an existing property, not
+  fixing a gap). 121 tests passing (up from 115), including one that caught a real
+  bug: the join/reconnect handshake was clobbering the rate-limit state on the
+  socket's attachment.
+- **Deferred by explicit decision, not forgotten:** mobile layout pass, custom
+  domain deploy.
+
 ---
 
 ## Deferred (Phase 2 backlog — do not build until the core loop is proven fun)

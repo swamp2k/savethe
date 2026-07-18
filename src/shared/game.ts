@@ -10,8 +10,19 @@ export type Phase =
   | 'challenge_active'
   | 'round_resolution'
   | 'risk_voting'
+  | 'stakes'
   | 'run_complete'
   | 'run_failed';
+
+/** The doom machine flavor for a run, chosen once at run start (engine
+ *  `beginRun`). Purely cosmetic — no minigame or engine logic branches on
+ *  it — but visible throughout the run via the Hud and plushie stage. */
+export type Machine = 'press' | 'cannon';
+
+export const MACHINES: Record<Machine, { emoji: string; label: string; failEmoji: string }> = {
+  press: { emoji: '🏭', label: 'the Hydraulic Press', failEmoji: '💥' },
+  cannon: { emoji: '🚀', label: 'the Cannon Into Space', failEmoji: '🌌' },
+};
 
 export interface Plushie {
   id: string;
@@ -56,6 +67,7 @@ export interface GameView {
   phase: Phase;
   round: number;
   difficulty: number;
+  machine: Machine;
 
   youId: string;
   hostId: string | null;
@@ -97,6 +109,7 @@ export const PHASE_LABELS: Record<Phase, string> = {
   challenge_active: 'Save it!',
   round_resolution: 'Resolution',
   risk_voting: 'Bank or Risk?',
+  stakes: 'Stakes',
   run_complete: 'Run banked',
   run_failed: 'Run over',
 };

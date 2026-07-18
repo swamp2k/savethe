@@ -42,7 +42,7 @@ function started(n: number, now = 1000): GameState {
  *  first entry in the weighted selectable pool (the Reaction Test) — most of
  *  this file exercises that game specifically via its `mpc_ready` stage. */
 function toActive(state: GameState, minigameRandom = 0): GameState {
-  let s = state;
+  let s = throughStakes(state);
   if (s.phase === 'mpc_voting') s = apply(s, { type: 'tick' }, s.deadline! + 1);
   // The minigame is picked on this specific transition (mpc_selected ->
   // challenge_intro); only this tick needs the non-default random.
@@ -80,6 +80,12 @@ function mpcMisses(s: GameState, readyAt = 2000): GameState {
   const atGo = mpcArmAndAwaitGo(s, readyAt);
   const signalAt = atGo.deadline as number;
   return apply(atGo, { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'click', elapsedMs: 900 } }, signalAt + 900);
+}
+
+/** A round reached via a RISK vote passes through a stakes recap beat before
+ *  the next MPC vote; skip past it by letting its deadline elapse. */
+function throughStakes(s: GameState): GameState {
+  return s.phase === 'stakes' ? apply(s, { type: 'tick' }, s.deadline! + 1) : s;
 }
 
 /** After an MPC miss, let the support race play out with nobody rescuing. */
@@ -137,6 +143,8 @@ describe('MPC selection', () => {
     expect(s.phase).toBe('risk_voting');
     s = apply(s, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 6000);
     s = apply(s, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 6000);
+    expect(s.phase).toBe('stakes');
+    s = throughStakes(s);
     // Round 2: previous MPC (p1) excluded -> p2.
     expect(s.phase).toBe('mpc_selected');
     expect(s.mpcId).toBe('p2');
@@ -183,6 +191,7 @@ describe('MPC selection', () => {
     s = apply(s, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 6000);
     s = apply(s, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 6000);
     s = apply(s, { type: 'riskVote', voterId: 'p3', choice: 'risk' }, 6000);
+    s = throughStakes(s);
     expect(s.phase).toBe('mpc_voting');
     expect(s.previousMpcId).toBe('p2');
     // A vote for the excluded previous MPC is ignored.
@@ -324,6 +333,43 @@ describe('bank / risk & the run', () => {
     expect(s.runSummary?.plushies).toHaveLength(1); // the one lost
     expect(s.unbanked).toHaveLength(0);
     expect(s.trophies).toHaveLength(0);
+  });
+});
+
+describe('stakes screen', () => {
+  it("skips the stakes beat for a run's first round", () => {
+    const s = started(2);
+    expect(s.phase).toBe('mpc_selected'); // straight in, no stakes
+  });
+
+  it('shows a stakes beat before a round reached via RISK, carrying the unbanked plushies', () => {
+    let s = mpcSucceeds(toActive(started(2)));
+    s = apply(s, { type: 'tick' }, s.deadline! + 1); // -> risk_voting
+    s = apply(s, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 5000);
+    s = apply(s, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 5000);
+    expect(s.phase).toBe('stakes');
+    expect(s.unbanked).toHaveLength(1); // still at risk
+    expect(s.currentPlushie).not.toBeNull(); // the next round's plushie is already assigned
+    expect(s.deadline).not.toBeNull();
+
+    s = apply(s, { type: 'tick' }, s.deadline! + 1);
+    expect(['mpc_voting', 'mpc_selected']).toContain(s.phase);
+  });
+});
+
+describe('destruction machine', () => {
+  it('is chosen once at run start and stays stable across rounds', () => {
+    const s = apply(initialGameState(), { type: 'syncPlayers', players: makePlayers(2) }, 0);
+    const press = apply(s, { type: 'start', byPlayerId: 'p1' }, 0, 0); // random=0 -> press
+    expect(press.machine).toBe('press');
+    const cannon = apply(s, { type: 'start', byPlayerId: 'p1' }, 0, 0.99); // random close to 1 -> cannon
+    expect(cannon.machine).toBe('cannon');
+
+    let run = mpcSucceeds(toActive(press));
+    run = apply(run, { type: 'tick' }, run.deadline! + 1); // -> risk_voting
+    run = apply(run, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 5000);
+    run = apply(run, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 5000);
+    expect(run.machine).toBe('press'); // unchanged mid-run
   });
 });
 

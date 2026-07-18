@@ -2,6 +2,8 @@ import { SELF, env, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import type { ServerMessage } from '../src/shared/protocol';
 import type { GameView } from '../src/shared/game';
+import { MAX_MESSAGE_BYTES, RATE_LIMIT_MAX_MESSAGES } from '../src/shared/constants';
+import { GameRoom } from '../src/server/GameRoom';
 
 /**
  * Durable Object integration tests. Each test connects real WebSockets through
@@ -175,6 +177,43 @@ describe('GameRoom lobby', () => {
     expect(pong.type).toBe('pong');
   });
 
+  it('rejects an oversized message without closing the socket', async () => {
+    const { socket } = await createAndJoin('Martin');
+    const oversized = JSON.stringify({ type: 'ping', pad: 'x'.repeat(MAX_MESSAGE_BYTES) });
+    socket.ws.send(oversized);
+
+    const err = await socket.waitFor('error');
+    if (err.type === 'error') {
+      expect(err.code).toBe('bad_message');
+      expect(err.fatal).toBe(false);
+    }
+
+    socket.send({ type: 'ping' });
+    const pong = await socket.waitFor('pong');
+    expect(pong.type).toBe('pong');
+  });
+
+  it('rate-limits a per-connection message flood, dropping excess without flooding errors back', async () => {
+    const { socket } = await createAndJoin('Flood');
+    // The join handshake itself already counted one message in this window,
+    // so RATE_LIMIT_MAX_MESSAGES - 1 pings are allowed before the limit trips.
+    const burst = RATE_LIMIT_MAX_MESSAGES + 5;
+    for (let i = 0; i < burst; i++) socket.send({ type: 'ping' });
+
+    let pongs = 0;
+    let errors = 0;
+    for (let i = 0; i < RATE_LIMIT_MAX_MESSAGES; i++) {
+      const msg = await socket.next();
+      if (msg.type === 'pong') pongs++;
+      else if (msg.type === 'error') {
+        errors++;
+        expect(msg.fatal).toBe(false);
+      }
+    }
+    expect(pongs).toBe(RATE_LIMIT_MAX_MESSAGES - 1);
+    expect(errors).toBe(1);
+  });
+
   it('refuses gameplay actions before joining', async () => {
     const socket = await connect();
     socket.send({ type: 'ping' });
@@ -254,6 +293,29 @@ describe('GameRoom game flow', () => {
     });
   });
 
+  it('resumes correctly after the DO instance is evicted and rebuilt mid-game', async () => {
+    // GameRoom keeps no authoritative state in instance fields — every
+    // handler reloads from storage. Simulate "the runtime tore down the old
+    // JS instance and constructed a fresh one before firing the alarm" by
+    // building a brand-new GameRoom bound to the same persisted
+    // DurableObjectState, and firing its alarm directly.
+    const { host } = await twoPlayerRoom('EVT');
+    host.send({ type: 'game.start' });
+    await host.waitForPhase('mpc_selected'); // schedules an alarm
+
+    const id = env.GAME_ROOM.idFromName('EVT');
+    await runInDurableObject(env.GAME_ROOM.get(id), async (_instance, state) => {
+      const fresh = new GameRoom(state, env);
+      await fresh.alarm();
+    });
+
+    // The alarm should have advanced mpc_selected -> challenge_intro, and
+    // the still-connected socket (bound to the DO's state, not the evicted
+    // JS instance) should have received the broadcast.
+    const view = await host.waitForPhase('challenge_intro');
+    expect(view.phase).toBe('challenge_intro');
+  });
+
   it('rejects a minigame action outside an active challenge', async () => {
     const { host } = await twoPlayerRoom('NCH');
     host.send({ type: 'minigame.action', payload: { kind: 'save' } });
@@ -284,5 +346,34 @@ describe('GameRoom game flow', () => {
       expect(rejoined.view.phase).not.toBe('lobby');
       expect(rejoined.view.mpcId).not.toBeNull();
     }
+  });
+});
+
+describe('RoomRegistry', () => {
+  it('reserves up to the cap and rejects beyond it', async () => {
+    const stub = env.ROOM_REGISTRY.get(env.ROOM_REGISTRY.idFromName('unit-test-cap'));
+    expect(await stub.tryReserve(2)).toBe(true);
+    expect(await stub.tryReserve(2)).toBe(true);
+    expect(await stub.tryReserve(2)).toBe(false); // over cap
+  });
+
+  it('release frees a slot for reuse', async () => {
+    const stub = env.ROOM_REGISTRY.get(env.ROOM_REGISTRY.idFromName('unit-test-release'));
+    await stub.tryReserve(1);
+    expect(await stub.tryReserve(1)).toBe(false);
+    await stub.release();
+    expect(await stub.tryReserve(1)).toBe(true);
+  });
+});
+
+describe('room cap (GameRoom <-> RoomRegistry wiring)', () => {
+  it('reserves a registry slot when a room is created', async () => {
+    const registryStub = env.ROOM_REGISTRY.get(env.ROOM_REGISTRY.idFromName('singleton'));
+    const before = await runInDurableObject(registryStub, async (instance) => instance.count());
+
+    await createAndJoin('CapCheck', 'CAP');
+
+    const after = await runInDurableObject(registryStub, async (instance) => instance.count());
+    expect(after).toBe(before + 1);
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Plushie } from '../shared/game';
+import type { Machine, Plushie } from '../shared/game';
 import { PlushieStage } from './PlushieStage';
 import { modelFor, type PlushieAnimation } from './models';
 
@@ -14,11 +14,13 @@ export function PlushieShowcase({
   plushie,
   mood,
   animation,
+  machine,
   compact,
 }: {
   plushie: Plushie | null;
   mood: string;
   animation: PlushieAnimation;
+  machine: Machine;
   /** Smaller viewer for busy screens (active minigames). */
   compact?: boolean;
 }) {
@@ -49,7 +51,7 @@ export function PlushieShowcase({
   }, [viewerState]);
 
   if (!plushie) return null;
-  if (!src || viewerState !== 'ready') return <PlushieStage plushie={plushie} mood={mood} />;
+  if (!src || viewerState !== 'ready') return <PlushieStage plushie={plushie} mood={mood} machine={machine} />;
 
   return (
     <div className={`showcase ${compact ? 'showcase--compact' : ''}`}>

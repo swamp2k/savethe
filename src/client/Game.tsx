@@ -1,5 +1,5 @@
 import type { Connection } from './useGameConnection';
-import type { GameView, Plushie } from '../shared/game';
+import { MACHINES, type GameView, type Plushie } from '../shared/game';
 import { MIN_PLAYERS, MAX_PLAYERS } from '../shared/constants';
 import { useCountdown } from './useCountdown';
 import { PlushieShowcase } from './PlushieShowcase';
@@ -26,6 +26,11 @@ function Hud({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf:
       <div className="hud__row">
         <span className="chip">Room {view.code}</span>
         {inRun && <span className="chip">Round {view.round}</span>}
+        {inRun && (
+          <span className="chip">
+            {MACHINES[view.machine].emoji} {MACHINES[view.machine].label}
+          </span>
+        )}
         {view.mpcId && <span className="chip chip--mpc">MPC: {nameOf(view.mpcId)}</span>}
         <button className="btn btn--ghost btn--small hud__leave" onClick={conn.leave}>
           Leave
@@ -93,6 +98,8 @@ function PhasePanel({
       return <Resolution conn={conn} view={view} nameOf={nameOf} />;
     case 'risk_voting':
       return <RiskVoting conn={conn} view={view} />;
+    case 'stakes':
+      return <Stakes view={view} />;
     case 'run_complete':
     case 'run_failed':
       return <RunOver view={view} />;
@@ -162,7 +169,7 @@ function MpcVoting({
     <div className="panel">
       <Timer deadline={view.deadline} />
       <h2 className="panel__title">Who do we trust?</h2>
-      <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" machine={view.machine} />
       <p className="hint center">Vote for the MPC — the challenge is revealed after.</p>
       <div className="vote-grid">
         {view.eligibleIds.map((id) => {
@@ -191,7 +198,7 @@ function MpcSelected({ view, nameOf }: { view: GameView; nameOf: (id: string | n
       <Timer deadline={view.deadline} />
       <div className="big-reveal">{you ? 'You are the MPC!' : `${nameOf(view.mpcId)} is the MPC`}</div>
       <p className="hint">{you ? 'The whole group is watching you.' : 'May the odds be ever in their favour.'}</p>
-      <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" machine={view.machine} />
     </div>
   );
 }
@@ -205,7 +212,7 @@ function ChallengeIntro({ view, nameOf }: { view: GameView; nameOf: (id: string 
       <p className="hint">
         {view.mpcId === view.youId ? 'Get ready — you are up.' : `${nameOf(view.mpcId)} is up. Get ready to help.`}
       </p>
-      <PlushieShowcase plushie={view.currentPlushie} mood="😨" animation="idle" />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😨" animation="idle" machine={view.machine} />
     </div>
   );
 }
@@ -226,7 +233,7 @@ function Challenge({
       {MinigameUI ? (
         <MinigameUI conn={conn} view={view} nameOf={nameOf} />
       ) : (
-        <PlushieShowcase plushie={view.currentPlushie} mood="😨" animation="idle" />
+        <PlushieShowcase plushie={view.currentPlushie} mood="😨" animation="idle" machine={view.machine} />
       )}
     </div>
   );
@@ -252,8 +259,9 @@ function Resolution({
       </div>
       <PlushieShowcase
         plushie={outcome.plushie}
-        mood={outcome.success ? '😄' : '💥'}
+        mood={outcome.success ? '😄' : MACHINES[view.machine].failEmoji}
         animation={outcome.success ? 'dance' : 'gesture-negative'}
+        machine={view.machine}
       />
       <p className="hint center">{outcome.headline}</p>
       {outcome.savedBy && <p className="hint center">Rescued by {nameOf(outcome.savedBy)} 🦸</p>}
@@ -283,6 +291,18 @@ function RiskVoting({ conn, view }: { conn: Connection; view: GameView }) {
         </button>
       </div>
       <p className="hint center">Bank secures them forever. Risk keeps them exposed for a harder round.</p>
+    </div>
+  );
+}
+
+function Stakes({ view }: { view: GameView }) {
+  return (
+    <div className="panel center-panel">
+      <Timer deadline={view.deadline} />
+      <h2 className="panel__title">Round {view.round} — here we go again</h2>
+      <PlushieShowcase plushie={view.currentPlushie} mood="🙂" animation="idle" machine={view.machine} />
+      <Shelf label="😰 Still at risk" plushies={view.unbanked} danger empty="—" />
+      <p className="hint center">Everyone banked so far is riding on this run. Get ready.</p>
     </div>
   );
 }

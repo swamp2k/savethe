@@ -1,10 +1,12 @@
 import { GameRoom } from './GameRoom';
+import { RoomRegistry } from './RoomRegistry';
 
-export { GameRoom };
+export { GameRoom, RoomRegistry };
 
 export interface Env {
   ASSETS: Fetcher;
   GAME_ROOM: DurableObjectNamespace<GameRoom>;
+  ROOM_REGISTRY: DurableObjectNamespace<RoomRegistry>;
 }
 
 const WS_PREFIX = '/ws/';

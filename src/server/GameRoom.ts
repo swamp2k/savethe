@@ -1,7 +1,15 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './index';
+import type { RoomRegistry } from './RoomRegistry';
 import { decodeClientMessage, encode, type ServerMessage, type ErrorCode } from '../shared/protocol';
-import { GRACE_MS, MAX_PLAYERS } from '../shared/constants';
+import {
+  GRACE_MS,
+  MAX_MESSAGE_BYTES,
+  MAX_PLAYERS,
+  MAX_ROOMS,
+  RATE_LIMIT_MAX_MESSAGES,
+  RATE_LIMIT_WINDOW_MS,
+} from '../shared/constants';
 import {
   initialGameState,
   projectFor,
@@ -28,6 +36,9 @@ interface PlayerRow {
 interface Attachment {
   code: string;
   playerId?: string;
+  /** Per-connection rate-limit window state (hardening). Lives on the
+   *  attachment, not an instance field, so it survives hibernation. */
+  rl?: { windowStart: number; count: number; warned: boolean };
 }
 
 const SUPERSEDED = 4000;
@@ -76,6 +87,12 @@ export class GameRoom extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const raw = typeof message === 'string' ? message : new TextDecoder().decode(message);
+    if (raw.length > MAX_MESSAGE_BYTES) {
+      this.send(ws, { type: 'error', code: 'bad_message', message: 'Message too large', fatal: false });
+      return;
+    }
+    if (!this.checkRateLimit(ws)) return;
+
     const decoded = decodeClientMessage(raw);
     if (!decoded.ok) {
       this.send(ws, { type: 'error', code: 'bad_message', message: 'Malformed message', fatal: false });
@@ -137,7 +154,9 @@ export class GameRoom extends DurableObject<Env> {
       }
     }
     if (this.players().length === 0) {
+      const wasInitialized = this.isInitialized();
       await this.ctx.storage.deleteAll();
+      if (wasInitialized) await this.releaseRoomSlot();
       return;
     }
 
@@ -169,6 +188,13 @@ export class GameRoom extends DurableObject<Env> {
       if (initialized && this.playerCount() > 0) {
         this.fail(ws, 'code_taken', 'That room code is already in use');
         return;
+      }
+      if (!initialized) {
+        const reserved = await this.reserveRoomSlot();
+        if (!reserved) {
+          this.fail(ws, 'server_busy', 'Too many active rooms right now — try again shortly');
+          return;
+        }
       }
       this.initRoom(code);
     } else if (!initialized) {
@@ -372,11 +398,35 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private bind(ws: WebSocket, code: string, playerId: string): void {
-    ws.serializeAttachment({ code, playerId } satisfies Attachment);
+    // Preserve rate-limit state: this runs mid-message, from inside the very
+    // join/reconnect message that checkRateLimit already accounted for at
+    // the top of webSocketMessage. A bare overwrite would silently reset the
+    // window on every join.
+    const rl = this.attachment(ws)?.rl;
+    ws.serializeAttachment({ code, playerId, rl } satisfies Attachment);
   }
 
   private attachment(ws: WebSocket): Attachment | null {
     return (ws.deserializeAttachment() as Attachment | null) ?? null;
+  }
+
+  /** Hardening: per-connection flood protection. State lives on the socket's
+   *  attachment (survives hibernation) rather than an instance field. Sends
+   *  at most one warning per exceeded window so the limiter itself can't be
+   *  used to flood the client back. */
+  private checkRateLimit(ws: WebSocket): boolean {
+    const att: Attachment = this.attachment(ws) ?? { code: '' };
+    const now = Date.now();
+    const fresh = !att.rl || now - att.rl.windowStart >= RATE_LIMIT_WINDOW_MS;
+    const windowStart = fresh ? now : att.rl!.windowStart;
+    const count = (fresh ? 0 : att.rl!.count) + 1;
+    const allowed = count <= RATE_LIMIT_MAX_MESSAGES;
+    const warned = fresh ? false : att.rl!.warned;
+    ws.serializeAttachment({ ...att, rl: { windowStart, count, warned: warned || !allowed } } satisfies Attachment);
+    if (!allowed && !warned) {
+      this.send(ws, { type: 'error', code: 'bad_message', message: 'Slow down', fatal: false });
+    }
+    return allowed;
   }
 
   // --- SQLite helpers ---------------------------------------------------------
@@ -400,6 +450,22 @@ export class GameRoom extends DurableObject<Env> {
 
   private isInitialized(): boolean {
     return this.metaGet('initialized') === '1';
+  }
+
+  /** Hardening: a global room cap, enforced through the RoomRegistry
+   *  singleton. Every successful reservation here is paired with exactly one
+   *  `releaseRoomSlot` call, in `alarm()`, when this room's storage is
+   *  finally torn down. */
+  private registry(): DurableObjectStub<RoomRegistry> {
+    return this.env.ROOM_REGISTRY.get(this.env.ROOM_REGISTRY.idFromName('singleton'));
+  }
+
+  private async reserveRoomSlot(): Promise<boolean> {
+    return this.registry().tryReserve(MAX_ROOMS);
+  }
+
+  private async releaseRoomSlot(): Promise<void> {
+    await this.registry().release();
   }
 
   private initRoom(code: string): void {

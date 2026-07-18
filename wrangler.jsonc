@@ -11,10 +11,16 @@
     "run_worker_first": ["/ws/*"]
   },
   "durable_objects": {
-    "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }]
+    "bindings": [
+      { "name": "GAME_ROOM", "class_name": "GameRoom" },
+      { "name": "ROOM_REGISTRY", "class_name": "RoomRegistry" }
+    ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["GameRoom"] }
+    { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
+    // RoomRegistry is a tiny singleton counter; plain (non-SQLite) DO storage
+    // is enough, so it's a `new_classes` entry rather than `new_sqlite_classes`.
+    { "tag": "v2", "new_classes": ["RoomRegistry"] }
   ],
   "observability": { "enabled": true }
 }

@@ -23,7 +23,7 @@ export const DebugMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) => 
 
   return (
     <>
-      <PlushieShowcase plushie={view.currentPlushie} mood="😨" animation="idle" compact />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😨" animation="idle" machine={view.machine} compact />
 
       {mg.role === 'mpc' && (
         <div className="actions">

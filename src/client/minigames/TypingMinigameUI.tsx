@@ -88,7 +88,7 @@ export const TypingMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) =>
   if (mg.role === 'mpc') {
     return (
       <>
-        <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" compact />
+        <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" machine={view.machine} compact />
         <p className="typing-progress">
           {mg.wordsCorrect} / {mg.wordsRequired} words
         </p>
@@ -113,7 +113,7 @@ export const TypingMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) =>
     const phrase = mg.myPhraseWords ?? [];
     return (
       <>
-        <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" compact />
+        <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" machine={view.machine} compact />
         <p className="hint">
           Type your phrase to help {nameOf(view.mpcId)}! ({myCompletedCount} completed)
         </p>
@@ -136,7 +136,7 @@ export const TypingMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) =>
 
   return (
     <>
-      <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" compact />
+      <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" machine={view.machine} compact />
       <p className="typing-progress">
         {mg.wordsCorrect} / {mg.wordsRequired} words
       </p>
