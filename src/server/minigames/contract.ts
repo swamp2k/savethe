@@ -66,6 +66,17 @@ export interface Minigame {
    */
   isDeadlineHidden?(state: unknown): boolean;
 
+  /**
+   * A stable, non-secret overall time budget suitable for a burning-fuse
+   * progress bar, or null when none applies right now. Distinct from
+   * `getNextDeadline`, which may jitter (per-target expiries) or be a secret
+   * (reaction's signal): the fuse is purely presentational pressure, so a
+   * minigame only exposes it when it has a fixed, player-visible budget.
+   * Optional; omitting it means "no fuse" (e.g. reaction, whose timing is
+   * secret, or platformer, whose approaching obstacle is already the clock).
+   */
+  getFuse?(state: unknown): { deadlineAt: number; totalMs: number } | null;
+
   /** Per-player projection: what this specific viewer may see. */
   getStateForPlayer(state: unknown, viewerId: string): unknown;
 }

@@ -15,6 +15,8 @@ declare module 'react' {
         'interaction-prompt'?: string;
         'disable-zoom'?: boolean;
         'disable-tap'?: boolean;
+        'camera-controls'?: boolean;
+        'auto-rotate'?: boolean;
       };
     }
   }

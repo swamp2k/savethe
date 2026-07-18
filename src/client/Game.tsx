@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Connection, EmoteEvent } from './useGameConnection';
 import { MACHINES, type GameView, type Plushie } from '../shared/game';
 import { MIN_PLAYERS, MAX_PLAYERS } from '../shared/constants';
 import type { EmoteKind } from '../shared/protocol';
 import { useCountdown } from './useCountdown';
 import { PlushieShowcase } from './PlushieShowcase';
+import { PlushieInspector } from './PlushieInspector';
 import { getMinigameUI } from './minigames/registry';
 import { playSound, useMuted } from './sound';
 
@@ -109,6 +110,9 @@ function Shelf({
   danger?: boolean;
   big?: boolean;
 }) {
+  // Each shelf owns its inspector modal, so every place a shelf renders
+  // (Hud, Bank/Risk, Stakes) gets click-to-admire for free.
+  const [inspected, setInspected] = useState<Plushie | null>(null);
   return (
     <div className={`shelf ${danger ? 'shelf--danger' : ''} ${big ? 'shelf--big' : ''}`}>
       <span className="shelf__label">
@@ -118,12 +122,18 @@ function Shelf({
       <div className="shelf__items">
         {plushies.length === 0 && empty && <span className="shelf__empty">{empty}</span>}
         {plushies.map((p) => (
-          <span key={p.id} className="shelf__item" title={p.name}>
+          <button
+            key={p.id}
+            className="shelf__item"
+            title={`${p.name} — click for a closer look`}
+            onClick={() => setInspected(p)}
+          >
             <span className="shelf__item-emoji">{p.emoji}</span>
             {big && <span className="shelf__item-name">{p.name}</span>}
-          </span>
+          </button>
         ))}
       </div>
+      {inspected && <PlushieInspector plushie={inspected} onClose={() => setInspected(null)} />}
     </div>
   );
 }
@@ -291,6 +301,32 @@ function ChallengeIntro({ view, nameOf }: { view: GameView; nameOf: (id: string 
   );
 }
 
+/** The pressure fuse: a rope burning down toward the bomb, ashes on the left,
+ *  spark at the burn point. Purely presentational — the fraction is recomputed
+ *  from the server-issued deadline every frame-ish tick, so it survives
+ *  reconnects and never drifts from the authoritative clock. */
+function Fuse({ fuse }: { fuse: { deadlineAt: number; totalMs: number } | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!fuse) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(id);
+  }, [fuse]);
+
+  if (!fuse) return null;
+  const remaining = Math.max(0, Math.min(1, (fuse.deadlineAt - now) / fuse.totalMs));
+  const urgent = fuse.deadlineAt - now <= 5000;
+  return (
+    <div className={`fuse ${urgent ? 'fuse--urgent' : ''}`} role="timer" aria-label="Time remaining">
+      <div className="fuse__rope" style={{ width: `${remaining * 100}%` }}>
+        <span className="fuse__spark">✴️</span>
+      </div>
+      <span className="fuse__bomb">💣</span>
+    </div>
+  );
+}
+
 function Challenge({
   conn,
   view,
@@ -304,6 +340,7 @@ function Challenge({
   return (
     <div className="panel center-panel">
       <Timer deadline={view.deadline} />
+      <Fuse fuse={view.fuse} />
       {MinigameUI ? (
         <MinigameUI conn={conn} view={view} nameOf={nameOf} />
       ) : (

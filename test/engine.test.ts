@@ -232,6 +232,30 @@ describe('the three round outcomes', () => {
   });
 });
 
+describe('fuse projection (challenge time-pressure bar)', () => {
+  it('projects the overall budget as a fuse for a budget-based minigame (aim)', () => {
+    const s = toActive(started(2), 0.42);
+    expect(s.activeMinigameId).toBe('aim');
+    const view = projectFor(s, s.mpcId!);
+    expect(view.fuse).not.toBeNull();
+    expect(view.fuse!.totalMs).toBe(20_000);
+    expect(view.fuse!.deadlineAt).toBeGreaterThan(0);
+    // The jittery per-target deadline stays hidden even though the fuse shows.
+    expect(view.deadline).toBeNull();
+  });
+
+  it('projects no fuse for a secret-timing minigame (reaction)', () => {
+    const s = toActive(started(2), 0);
+    expect(s.activeMinigameId).toBe('reaction');
+    expect(projectFor(s, s.mpcId!).fuse).toBeNull();
+  });
+
+  it('projects no fuse outside challenge_active', () => {
+    const s = started(2);
+    expect(projectFor(s, 'p1').fuse).toBeNull();
+  });
+});
+
 describe('minigame selection (M4 exit criteria: both minigames playable, no engine changes)', () => {
   it('can select and fully play the Typing Challenge through the exact same generic dispatch', () => {
     // Six equal-weight entries now (reaction, typing, aim, memory, tetris,
@@ -283,7 +307,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     const required = (projectFor(s, s.mpcId!).minigame!.view as { requiredHits: number }).requiredHits;
     for (let i = 0; i < required; i++) {
       const mg = projectFor(s, s.mpcId!).minigame!.view as { targetId: number };
-      const spawnAt = s.deadline! - 1000; // difficulty 1 -> hitThresholdMs 1000
+      const spawnAt = s.deadline! - 1200; // difficulty 1 -> hitThresholdMs 1200
       s = apply(
         s,
         { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'hit', targetId: mg.targetId, elapsedMs: 200 } },

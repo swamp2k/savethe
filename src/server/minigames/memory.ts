@@ -213,6 +213,15 @@ export const memoryGame: Minigame = {
     return s.stage === 'study' ? s.studyDeadlineAt : s.deadlineForChallenge;
   },
 
+  getFuse(state: unknown): { deadlineAt: number; totalMs: number } | null {
+    const s = asState(state);
+    if (s.outcome !== 'pending') return null;
+    // One fuse per stage: the short study window, then the recall budget.
+    return s.stage === 'study'
+      ? { deadlineAt: s.studyDeadlineAt, totalMs: s.studyDeadlineAt - s.startedAt }
+      : { deadlineAt: s.deadlineForChallenge, totalMs: s.timeBudgetMs };
+  },
+
   getStateForPlayer(state: unknown, viewerId: string): unknown {
     const s = asState(state);
     const role = viewerId === s.mpcId ? 'mpc' : s.supportIds.includes(viewerId) ? 'support' : 'spectator';

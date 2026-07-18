@@ -76,6 +76,11 @@ export interface GameView {
   /** Milliseconds since epoch when the current phase auto-advances, if timed. */
   deadline: number | null;
 
+  /** Burning-fuse pressure bar for the active challenge: the minigame's fixed
+   *  overall budget (never the jittery/secret per-action deadlines). Null
+   *  whenever the active minigame has no stable, player-visible budget. */
+  fuse: { deadlineAt: number; totalMs: number } | null;
+
   // MPC selection
   mpcId: string | null;
   previousMpcId: string | null;
