@@ -238,7 +238,7 @@ describe('fuse projection (challenge time-pressure bar)', () => {
     expect(s.activeMinigameId).toBe('aim');
     const view = projectFor(s, s.mpcId!);
     expect(view.fuse).not.toBeNull();
-    expect(view.fuse!.totalMs).toBe(20_000);
+    expect(view.fuse!.totalMs).toBe(12_000);
     expect(view.fuse!.deadlineAt).toBeGreaterThan(0);
     // The jittery per-target deadline stays hidden even though the fuse shows.
     expect(view.deadline).toBeNull();

@@ -49,7 +49,7 @@ describe('typing test: MPC progress', () => {
   it('resolves success when the MPC types the full passage', () => {
     const s = fresh();
     const passage = mpcView(s).passageWords;
-    const typed = typingGame.handleMpcAction(s, { kind: 'type', text: `${passage.join(' ')} ` }, ctx(20_000));
+    const typed = typingGame.handleMpcAction(s, { kind: 'type', text: `${passage.join(' ')} ` }, ctx(15_000));
     expect(typingGame.evaluate(typed, ctx(0))).toMatchObject({ status: 'resolved', success: true });
   });
 
@@ -57,7 +57,7 @@ describe('typing test: MPC progress', () => {
     // No reason to make a player type one keystroke they don't need to.
     const s = fresh();
     const passage = mpcView(s).passageWords;
-    const typed = typingGame.handleMpcAction(s, { kind: 'type', text: passage.join(' ') }, ctx(20_000));
+    const typed = typingGame.handleMpcAction(s, { kind: 'type', text: passage.join(' ') }, ctx(15_000));
     expect(mpcView(typed).wordsCorrect).toBe(passage.length);
     expect(typingGame.evaluate(typed, ctx(0))).toMatchObject({ status: 'resolved', success: true });
   });
@@ -191,8 +191,8 @@ describe('typing test: deadline and difficulty', () => {
     };
     expect(easy.passageWords.length).toBe(7);
     expect(hard.passageWords.length).toBe(14); // capped
-    expect(easy.timeBudgetMs).toBe(25_000);
-    expect(hard.timeBudgetMs).toBe(16_000); // floored
+    expect(easy.timeBudgetMs).toBe(18_000);
+    expect(hard.timeBudgetMs).toBe(12_000); // floored
   });
 });
 
