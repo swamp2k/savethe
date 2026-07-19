@@ -6,6 +6,7 @@ import { platformerGame } from './platformer';
 import { reactionGame } from './reaction';
 import { tetrisGame } from './tetris';
 import { typingGame } from './typing';
+import { wireGame } from './wire';
 
 /**
  * The minigame registry. Adding a minigame means adding it here and nowhere
@@ -29,6 +30,7 @@ const SELECTABLE: readonly Minigame[] = [
   memoryGame,
   tetrisGame,
   platformerGame,
+  wireGame,
 ];
 const ALL: readonly Minigame[] = [debugGame, ...SELECTABLE];
 

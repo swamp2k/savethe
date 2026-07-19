@@ -1331,6 +1331,17 @@ h3,
   transform: scale(0.9);
 }
 
+/* --- Wire Panic --- */
+.wire-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; width: 100%; }
+.wire-button { min-height: 4rem; border: 3px solid currentColor; border-radius: var(--radius-small); background: var(--bg-inset); color: var(--text); font: inherit; font-weight: 900; letter-spacing: 0.08em; cursor: pointer; }
+.wire-button--red { color: #ff7373; }
+.wire-button--blue { color: #70b7ff; }
+.wire-button--green { color: #73e69e; }
+.wire-button--yellow { color: #ffe070; }
+.wire-clues { display: grid; gap: 0.35rem; width: min(100%, 420px); padding: 1rem; border-radius: var(--radius-small); background: var(--bg-inset); text-align: center; font-weight: 800; }
+.wire-clues--support { font-size: 1.4rem; color: var(--accent-2); }
+.wire-clues em { color: var(--text); font-size: 0.85rem; font-style: normal; letter-spacing: 0.08em; }
+
 /* --- Tetris-like (Block Fit) --- */
 .tetris-grid {
   display: grid;

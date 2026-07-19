@@ -282,6 +282,14 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     expect(nextRun.lastMinigameId).toBe('typing');
   });
 
+  it('drives Wire Panic through the generic minigame dispatch', () => {
+    let s = toActive(started(2), 'wire');
+    expect(s.activeMinigameId).toBe('wire');
+    s = apply(s, { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'cut', wire: 'red' } }, s.deadline! - 1);
+    expect(s.phase).toBe('round_resolution');
+    expect(s.outcome?.success).toBe(true);
+  });
+
   it('can select and fully play the Typing Challenge through the exact same generic dispatch', () => {
     // Six equal-weight entries now (reaction, typing, aim, memory, tetris,
     // platformer); random=0.25 lands on the second one (typing).

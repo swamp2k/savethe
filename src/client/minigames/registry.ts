@@ -6,6 +6,7 @@ import { PlatformerMinigameUI } from './PlatformerMinigameUI';
 import { ReactionMinigameUI } from './ReactionMinigameUI';
 import { TetrisMinigameUI } from './TetrisMinigameUI';
 import { TypingMinigameUI } from './TypingMinigameUI';
+import { WirePanicMinigameUI } from './WirePanicMinigameUI';
 
 /** Client counterpart to the server's minigame registry, keyed by the same id. */
 const REGISTRY: Record<string, MinigameUIComponent> = {
@@ -16,6 +17,7 @@ const REGISTRY: Record<string, MinigameUIComponent> = {
   memory: MemoryMinigameUI,
   tetris: TetrisMinigameUI,
   platformer: PlatformerMinigameUI,
+  wire: WirePanicMinigameUI,
 };
 
 export function getMinigameUI(id: string): MinigameUIComponent | undefined {
