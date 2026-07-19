@@ -290,6 +290,15 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     expect(s.outcome?.success).toBe(true);
   });
 
+  it('drives Spelling Panic through the generic minigame dispatch', () => {
+    let s = toActive(started(2), 'spelling');
+    expect(s.activeMinigameId).toBe('spelling');
+    s = apply(s, { type: 'tick' }, s.deadline!);
+    s = apply(s, { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'submit', word: 'banana' } }, s.deadline! - 1);
+    expect(s.phase).toBe('round_resolution');
+    expect(s.outcome?.success).toBe(true);
+  });
+
   it('can select and fully play the Typing Challenge through the exact same generic dispatch', () => {
     // Six equal-weight entries now (reaction, typing, aim, memory, tetris,
     // platformer); random=0.25 lands on the second one (typing).
