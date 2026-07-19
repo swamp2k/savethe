@@ -21,9 +21,9 @@ const actionSchema = z.object({ kind: z.literal('move'), direction: z.enum(['up'
 type MazeAction = z.infer<typeof actionSchema>;
 type Direction = MazeAction['direction'];
 const DELTAS: Record<Direction, Point> = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
-const BASE_TIME_MS = 26_000;
+const BASE_TIME_MS = 36_000;
 const TIME_STEP_MS = 1_500;
-const MIN_TIME_MS = 16_000;
+const MIN_TIME_MS = 26_000;
 const MAX_BUMPS = 3;
 
 function asState(state: unknown): MazeState { return state as MazeState; }

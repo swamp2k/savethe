@@ -56,7 +56,7 @@ const MPC_THRESHOLD_STEP_MS = 10;
 const MPC_THRESHOLD_FLOOR_MS = 210;
 const SUPPORT_THRESHOLD_MS = 350;
 
-const READY_TIMEOUT_MS = 8_000;
+const READY_TIMEOUT_MS = 12_000;
 const MIN_GO_DELAY_MS = 1_200;
 const MAX_GO_DELAY_MS = 3_500;
 /** Extra time the server waits past a threshold for a message to arrive

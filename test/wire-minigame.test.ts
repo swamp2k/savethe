@@ -9,6 +9,11 @@ function fresh(config: MinigameConfig = { difficulty: 1, mpcId: 'mpc', supportId
 function view(state: unknown, viewerId: string) { return wireGame.getStateForPlayer(state, viewerId) as { role: string; wires: string[]; clues: string[] }; }
 
 describe('Wire Panic', () => {
+  it('keeps a 17-second floor at high difficulty', () => {
+    const hard = wireGame.createInitialState({ difficulty: 99, mpcId: 'mpc', supportIds: [] }, ctx(0)) as { timeBudgetMs: number };
+    expect(hard.timeBudgetMs).toBe(17_000);
+  });
+
   it('validates only cuts of known wires', () => {
     expect(wireGame.actionSchema.safeParse({ kind: 'cut', wire: 'red' }).success).toBe(true);
     expect(wireGame.actionSchema.safeParse({ kind: 'cut', wire: 'purple' }).success).toBe(false);
@@ -40,7 +45,7 @@ describe('Wire Panic', () => {
 
   it('times out and exposes a fixed fuse', () => {
     const state = fresh();
-    expect(wireGame.getFuse!(state)).toEqual({ deadlineAt: 12_000, totalMs: 12_000 });
-    expect(wireGame.evaluate(wireGame.onDeadline(state, ctx(12_000)), ctx(12_000))).toMatchObject({ status: 'resolved', success: false });
+    expect(wireGame.getFuse!(state)).toEqual({ deadlineAt: 22_000, totalMs: 22_000 });
+    expect(wireGame.evaluate(wireGame.onDeadline(state, ctx(22_000)), ctx(22_000))).toMatchObject({ status: 'resolved', success: false });
   });
 });

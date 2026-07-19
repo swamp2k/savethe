@@ -20,8 +20,8 @@ export const spellingGame: Minigame = {
   id: 'spelling', title: 'Spelling Panic', actionSchema,
   createInitialState(config: MinigameConfig, ctx: MinigameContext): State {
     const targetWord = pool(config.difficulty)[Math.floor(ctx.random() * pool(config.difficulty).length)] ?? EASY[0];
-    const studyMs = Math.max(1500, 3000 - (config.difficulty - 1) * 250);
-    const recallMs = Math.max(7000, 12000 - (config.difficulty - 1) * 750);
+    const studyMs = Math.max(2500, 4500 - (config.difficulty - 1) * 250);
+    const recallMs = Math.max(17000, 22000 - (config.difficulty - 1) * 750);
     return { mpcId: config.mpcId, supportIds: config.supportIds, targetWord, stage: 'study', revealed: targetWord.split('').map((_, i) => i === 0 || i === targetWord.length - 1), studyMs, recallMs, deadlineAt: 0, supportPrompts: prompts(config.supportIds, 1, ctx.random), nextPromptId: config.supportIds.length + 1, submittedWord: null, supportReveals: 0, outcome: 'pending' };
   },
   onStart(state: unknown, ctx: MinigameContext): State { const s = asState(state); return { ...s, deadlineAt: ctx.now + s.studyMs }; },

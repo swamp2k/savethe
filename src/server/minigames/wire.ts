@@ -18,9 +18,9 @@ interface WireState {
 }
 
 const COLORS = ['red', 'blue', 'green', 'yellow'] as const satisfies readonly WireColor[];
-const BASE_TIME_MS = 12_000;
+const BASE_TIME_MS = 22_000;
 const TIME_STEP_MS = 750;
-const MIN_TIME_MS = 7_000;
+const MIN_TIME_MS = 17_000;
 
 const actionSchema = z.object({ kind: z.literal('cut'), wire: z.enum(COLORS) });
 type WireAction = z.infer<typeof actionSchema>;

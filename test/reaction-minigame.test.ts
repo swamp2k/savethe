@@ -59,6 +59,7 @@ describe('reaction test: arming and the go signal', () => {
     // down to the test" when it's really just an unrelated AFK safety net.
     // The client replaces it with a state-driven visual signal instead.
     expect(reactionGame.isDeadlineHidden!(s)).toBe(true);
+    expect(reactionGame.getNextDeadline(s)).toBe(12_000);
   });
 
   it('stays hidden while armed and waiting for the signal', () => {
@@ -134,6 +135,7 @@ describe('reaction test: MPC outcomes', () => {
     const hard = reactionGame.createInitialState({ ...config, difficulty: 10 }, ctx(0)) as { mpcThresholdMs: number };
     expect(easy.mpcThresholdMs).toBe(250);
     expect(hard.mpcThresholdMs).toBe(210); // floor
+    expect(view(easy, 'mpc').supportThresholdMs).toBe(350);
   });
 });
 

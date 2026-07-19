@@ -123,6 +123,11 @@ describe('tetris: hard drop, locking, and topping out', () => {
     expect(tetrisGame.evaluate(failed, ctx(0))).toMatchObject({ status: 'resolved', success: false });
   });
 
+  it('uses a 40-second overall budget', () => {
+    const state = tetrisGame.createInitialState(config, ctx(0)) as { timeBudgetMs: number };
+    expect(state.timeBudgetMs).toBe(40_000);
+  });
+
   it('scales requiredLines up with difficulty, bounded', () => {
     const easy = tetrisGame.createInitialState({ ...config, difficulty: 1 }, ctx(0)) as { requiredLines: number };
     const hard = tetrisGame.createInitialState({ ...config, difficulty: 20 }, ctx(0)) as { requiredLines: number };

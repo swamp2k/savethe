@@ -62,17 +62,17 @@ const BASE_REQUIRED_HITS = 6;
 const REQUIRED_HITS_STEP = 1;
 const MAX_REQUIRED_HITS = 12;
 
-const BASE_TARGET_LIFETIME_MS = 1200;
+const BASE_TARGET_LIFETIME_MS = 1500;
 const TARGET_LIFETIME_STEP_MS = 60;
 /** Long enough for a real click-on-a-visible-target action, unlike Reaction
  *  Test's much tighter pure-reflex floor. Tuned for the full-width desktop
  *  arena, where cursor travel between targets is real distance. */
-const TARGET_LIFETIME_FLOOR_MS = 650;
+const TARGET_LIFETIME_FLOOR_MS = 850;
 
 /** Fixed rather than difficulty-scaled: the two knobs above already carry
  *  the difficulty curve. Tight enough that the fuse visibly burns — 6 hits
  *  at ~1.2s target lifetimes fits comfortably, but there's no idle slack. */
-const TIME_BUDGET_MS = 12_000;
+const TIME_BUDGET_MS = 22_000;
 
 const SUPPORT_REDUCTION_PER_HIT = 1;
 const REQUIRED_HITS_FLOOR_RATIO = 0.4;

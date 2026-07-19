@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClientMessage, EmoteKind, ServerMessage } from '../shared/protocol';
 import type { GameView } from '../shared/game';
 import { generateRoomCode, normalizeRoomCode } from '../shared/room-code';
+import { canSendGameplay, sendRaw as sendRawToSocket } from './transport';
 
 /** A received spectator emote, kept client-side only long enough to animate
  *  (see EMOTE_LIFETIME_MS below) — never persisted, never part of GameView. */
@@ -31,6 +32,8 @@ export interface Self {
 
 export interface Connection {
   status: ConnectionStatus;
+  /** True only once the current socket has completed its room handshake. */
+  canSend: boolean;
   view: GameView | null;
   self: Self | null;
   error: string | null;
@@ -102,6 +105,7 @@ export function useGameConnection(): Connection {
   const [self, setSelf] = useState<Self | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [emotes, setEmotes] = useState<EmoteEvent[]>([]);
+  const [socketOpen, setSocketOpen] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const intentRef = useRef<Intent | null>(null);
@@ -111,10 +115,26 @@ export function useGameConnection(): Connection {
   const closingRef = useRef(false);
   const nextEmoteId = useRef(0);
 
-  const send = useCallback((message: ClientMessage) => {
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+  /**
+   * Sends a transport message when possible. Handshakes and keep-alives use
+   * this directly: a not-yet-open socket is expected there, not a player
+   * action that needs visible feedback.
+   */
+  const sendRaw = useCallback((message: ClientMessage): boolean => {
+    const sent = sendRawToSocket(wsRef.current, message, WebSocket.OPEN);
+    if (!sent) setSocketOpen(false);
+    return sent;
   }, []);
+
+  /** Gameplay actions must never disappear into a stale socket. */
+  const send = useCallback((message: ClientMessage): boolean => {
+    const sent = sendRaw(message);
+    if (!sent) {
+      setSocketOpen(false);
+      setError('Connection interrupted — action not sent. Reconnecting…');
+    }
+    return sent;
+  }, [sendRaw]);
 
   const clearTimers = useCallback(() => {
     if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
@@ -129,18 +149,20 @@ export function useGameConnection(): Connection {
 
     clearTimers();
     closingRef.current = false;
+    setSocketOpen(false);
     setStatus(attemptsRef.current === 0 ? 'connecting' : 'reconnecting');
 
     const ws = new WebSocket(socketUrl(intent.code));
     wsRef.current = ws;
 
     ws.onopen = () => {
+      setSocketOpen(true);
       if (intent.kind === 'reconnect') {
-        send({ type: 'room.reconnect', token: intent.token });
+        sendRaw({ type: 'room.reconnect', token: intent.token });
       } else {
-        send({ type: 'room.join', mode: intent.kind, nickname: intent.nickname });
+        sendRaw({ type: 'room.join', mode: intent.kind, nickname: intent.nickname });
       }
-      pingTimer.current = setInterval(() => send({ type: 'ping' }), PING_INTERVAL_MS);
+      pingTimer.current = setInterval(() => sendRaw({ type: 'ping' }), PING_INTERVAL_MS);
     };
 
     ws.onmessage = (event) => {
@@ -163,6 +185,7 @@ export function useGameConnection(): Connection {
         }
         case 'game.state':
           setView(message.view);
+          setError(null);
           setStatus('connected');
           break;
         case 'emote': {
@@ -188,6 +211,7 @@ export function useGameConnection(): Connection {
     };
 
     ws.onclose = (event) => {
+      setSocketOpen(false);
       if (pingTimer.current) clearInterval(pingTimer.current);
       pingTimer.current = null;
       if (closingRef.current) return;
@@ -211,9 +235,10 @@ export function useGameConnection(): Connection {
     };
 
     ws.onerror = () => {
+      setSocketOpen(false);
       // onclose will follow and drive reconnect logic.
     };
-  }, [clearTimers, send]);
+  }, [clearTimers, sendRaw]);
 
   const createRoom = useCallback(
     (nickname: string) => {
@@ -241,6 +266,7 @@ export function useGameConnection(): Connection {
     attemptsRef.current = 0;
     wsRef.current?.close();
     wsRef.current = null;
+    setSocketOpen(false);
     setView(null);
     setSelf(null);
     setError(null);
@@ -275,6 +301,7 @@ export function useGameConnection(): Connection {
 
   return {
     status,
+    canSend: canSendGameplay(status, socketOpen),
     view,
     self,
     error,

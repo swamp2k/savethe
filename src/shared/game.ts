@@ -14,6 +14,7 @@ export type Phase =
   | 'cruelty_event'
   | 'stakes'
   | 'last_chance'
+  | 'run_saved'
   | 'run_complete'
   | 'run_failed';
 
@@ -138,6 +139,8 @@ export interface GameView {
   activeEffects: ActiveEffectsView;
   cruelty: CrueltyView | null;
   lastChance: LastChanceView | null;
+  /** One automatic collection save is available at the beginning of every run. */
+  runSaveTokens: number;
 
   // Active challenge (per-player projection from the plugin)
   minigame: { id: string; title: string; view: unknown } | null;
@@ -158,6 +161,7 @@ export const PHASE_LABELS: Record<Phase, string> = {
   cruelty_event: 'The machine demands a choice',
   stakes: 'Stakes',
   last_chance: 'Last Chance',
+  run_saved: 'Run saved',
   run_complete: 'Run banked',
   run_failed: 'Run over',
 };

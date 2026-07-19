@@ -248,7 +248,7 @@ describe('fuse projection (challenge time-pressure bar)', () => {
     expect(s.activeMinigameId).toBe('aim');
     const view = projectFor(s, s.mpcId!, (s.minigameState as { deadlineForChallenge: number }).deadlineForChallenge - 7_000);
     expect(view.fuse).not.toBeNull();
-    expect(view.fuse!.totalMs).toBe(12_000);
+    expect(view.fuse!.totalMs).toBe(22_000);
     expect(view.fuse!.remainingMs).toBe(7_000);
     // The jittery per-target deadline stays hidden even though the fuse shows.
     expect(view.deadlineRemainingMs).toBeNull();
@@ -382,7 +382,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     const required = (projectFor(s, s.mpcId!).minigame!.view as { requiredHits: number }).requiredHits;
     for (let i = 0; i < required; i++) {
       const mg = projectFor(s, s.mpcId!).minigame!.view as { targetId: number };
-      const spawnAt = s.deadline! - 1200; // difficulty 1 -> hitThresholdMs 1200
+      const spawnAt = s.deadline! - 1500; // difficulty 1 -> hitThresholdMs 1500
       s = apply(
         s,
         { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'hit', targetId: mg.targetId, elapsedMs: 200 } },
@@ -454,7 +454,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     // using that action's own ctx.random (apply()'s default is 0, which would
     // start generating 'jump' obstacles instead after the first response).
     for (let i = 0; i < required; i++) {
-      const spawnAt = s.deadline! - 700; // difficulty 1 -> obstacleWindowMs 700
+      const spawnAt = s.deadline! - 1800; // difficulty 1 -> obstacleWindowMs 1800
       s = apply(
         s,
         { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'react', response: 'duck', elapsedMs: 200 } },
@@ -520,6 +520,7 @@ describe('bank / risk & the run', () => {
     s = apply(s, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 4000);
     s = apply(s, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 4000);
     s = toActive(s);
+    s = { ...s, runSaveTokens: 0 }; // this test exercises the post-save catastrophic failure path
     s = mpcMisses(s);
     s = noOneRescues(s);
     expect(s.phase).toBe('round_resolution');
@@ -619,6 +620,10 @@ describe('per-player projection', () => {
 });
 
 describe('durations are sane', () => {
+  it('gives players seven seconds to understand the challenge intro', () => {
+    expect(DURATIONS.challengeIntro).toBe(7_000);
+  });
+
   it('every timed phase has a positive duration', () => {
     for (const ms of Object.values(DURATIONS)) expect(ms).toBeGreaterThan(0);
   });

@@ -57,9 +57,9 @@ const MAX_PASSAGE_WORDS = 14;
 
 // Sized for a casual ~30wpm typist with a couple of typos, not a leisurely
 // stroll — the fuse should feel like it's actually burning.
-const BASE_TIME_BUDGET_MS = 18_000;
+const BASE_TIME_BUDGET_MS = 28_000;
 const TIME_BUDGET_STEP_MS = 1_000;
-const MIN_TIME_BUDGET_MS = 12_000;
+const MIN_TIME_BUDGET_MS = 22_000;
 
 const SUPPORT_REDUCTION_PER_BURST = 2;
 /** Support can lower the MPC's target, but never trivialize their task. */

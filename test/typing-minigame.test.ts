@@ -191,8 +191,8 @@ describe('typing test: deadline and difficulty', () => {
     };
     expect(easy.passageWords.length).toBe(7);
     expect(hard.passageWords.length).toBe(14); // capped
-    expect(easy.timeBudgetMs).toBe(18_000);
-    expect(hard.timeBudgetMs).toBe(12_000); // floored
+    expect(easy.timeBudgetMs).toBe(28_000);
+    expect(hard.timeBudgetMs).toBe(22_000); // floored
   });
 });
 

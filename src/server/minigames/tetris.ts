@@ -127,7 +127,7 @@ const MAX_REQUIRED_LINES = 6;
 
 /** Fixed rather than difficulty-scaled: requiredLines alone carries the
  *  difficulty curve, and clearing more lines already takes longer. */
-const TIME_BUDGET_MS = 30_000;
+const TIME_BUDGET_MS = 40_000;
 
 const SUPPORT_CHUTE_HEIGHT = 4;
 const SUPPORT_REDUCTION_PER_CHUTE = 1;

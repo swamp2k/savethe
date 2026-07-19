@@ -92,6 +92,13 @@ describe('memory: MPC recall', () => {
     expect(memoryGame.evaluate(timedOut, ctx(0))).toMatchObject({ status: 'resolved', success: false });
   });
 
+  it('uses a 25-second recall budget at every difficulty', () => {
+    const easy = memoryGame.createInitialState(config, ctx(0)) as { timeBudgetMs: number };
+    const hard = memoryGame.createInitialState({ ...config, difficulty: 99 }, ctx(0)) as { timeBudgetMs: number };
+    expect(easy.timeBudgetMs).toBe(25_000);
+    expect(hard.timeBudgetMs).toBe(25_000);
+  });
+
   it('scales sequence length up and study speed down with difficulty, both bounded', () => {
     const easy = memoryGame.createInitialState({ ...config, difficulty: 1 }, ctx(0)) as {
       sequenceLength: number;

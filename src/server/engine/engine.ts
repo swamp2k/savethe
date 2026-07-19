@@ -57,6 +57,7 @@ export interface GameState {
   lastChanceUsed: boolean;
   lastChanceAttemptId: number;
   lastChance: LastChanceState | null;
+  runSaveTokens: number;
   runSummary: RunSummary | null;
 }
 
@@ -75,13 +76,14 @@ export type EngineAction =
 export const DURATIONS = {
   mpcVote: 30_000,
   mpcSelected: 3_000,
-  challengeIntro: 4_000,
+  challengeIntro: 7_000,
   resolution: 6_000,
   plushieNaming: 10_000,
   riskVote: 30_000,
   stakes: 6_000,
   cruelty: 20_000,
   sacrificeResolution: 4_000,
+  runSaved: 6_000,
   runEnd: 8_000,
 } as const;
 
@@ -96,7 +98,7 @@ export function initialGameState(): GameState {
     code: '', phase: 'lobby', players: [], hostId: null, runId: 0, round: 0, difficulty: 1, machine: 'press', deadline: null,
     previousMpcId: null, mpcId: null, mpcVotes: {}, currentPlushie: null, unbanked: [], trophies: [], namingPlayerId: null,
     riskVotes: {}, cruelty: null, roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false },
-    activeMinigameId: null, minigameBag: [], lastMinigameId: null, minigameState: null, outcome: null, lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null,
+    activeMinigameId: null, minigameBag: [], lastMinigameId: null, minigameState: null, outcome: null, lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSaveTokens: 1,
     runSummary: null,
   };
 }
@@ -122,6 +124,7 @@ export function normalizeGameState(raw: GameState): GameState {
     lastChanceUsed: state.lastChanceUsed ?? false,
     lastChanceAttemptId: state.lastChanceAttemptId ?? 0,
     lastChance: state.lastChance ?? null,
+    runSaveTokens: state.runSaveTokens ?? 1,
   };
 }
 
@@ -174,7 +177,7 @@ function beginRun(state: GameState, ctx: MinigameContext): GameState {
     ...state, runId: state.runId + 1, round: 0, difficulty: 1, machine: ctx.random() < 0.5 ? 'press' : 'cannon',
     unbanked: [], previousMpcId: null, mpcId: null, mpcVotes: {}, riskVotes: {}, namingPlayerId: null, cruelty: null,
     roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false }, outcome: null,
-    lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSummary: null,
+    lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSaveTokens: 1, runSummary: null,
   };
   return enterMpcVoting(setupRound(next, ctx), ctx);
 }
@@ -353,11 +356,11 @@ function selectLastChanceHero(state: GameState, ctx: MinigameContext): string | 
   return pool[Math.floor(ctx.random() * pool.length)]?.playerId ?? null;
 }
 function maybeEnterLastChance(state: GameState, ctx: MinigameContext): GameState {
-  if (state.lastChanceUsed || !state.currentPlushie || state.outcome?.success) return enterRunFailed(state, ctx);
+  if (state.lastChanceUsed || !state.currentPlushie || state.outcome?.success) return finishFailedRun(state, ctx);
   const chance = Math.min(0.75, LAST_CHANCE_BASE_CHANCE + luckyCharmBonus(state.unbanked));
-  if (ctx.random() <= 1 - chance) return enterRunFailed(state, ctx);
+  if (ctx.random() <= 1 - chance) return finishFailedRun(state, ctx);
   const playerId = selectLastChanceHero(state, ctx);
-  if (!playerId) return enterRunFailed(state, ctx);
+  if (!playerId) return finishFailedRun(state, ctx);
   return startLastChance({ ...state, lastChanceUsed: true }, playerId, ctx);
 }
 function startLastChance(state: GameState, playerId: string, ctx: MinigameContext): GameState {
@@ -376,9 +379,9 @@ function applyLastChanceHit(state: GameState, playerId: string, attemptId: numbe
   const lastChance = state.lastChance;
   if (state.phase !== 'last_chance' || !lastChance || lastChance.playerId !== playerId || lastChance.attemptId !== attemptId || lastChance.outcome !== 'pending') return state;
   if (elapsedMs < MIN_PLAUSIBLE_MS || elapsedMs > ctx.now - lastChance.startedAt + LATENCY_TOLERANCE_MS) return state;
-  if (elapsedMs > lastChance.windowMs) return enterRunFailed({ ...state, lastChance: { ...lastChance, outcome: 'failure' } }, ctx);
+  if (elapsedMs > lastChance.windowMs) return finishFailedRun({ ...state, lastChance: { ...lastChance, outcome: 'failure' } }, ctx);
   const plushie = state.currentPlushie;
-  if (!plushie || !state.outcome) return enterRunFailed(state, ctx);
+  if (!plushie || !state.outcome) return finishFailedRun(state, ctx);
   const alreadySaved = state.unbanked.some((unbanked) => unbanked.id === plushie.id);
   return {
     ...state, phase: 'round_resolution', lastChance: null,
@@ -392,6 +395,20 @@ function playerName(state: GameState, playerId: string): string { return state.p
 function enterRunComplete(state: GameState, ctx: MinigameContext): GameState {
   const runSummary: RunSummary = { banked: true, rounds: state.round, plushies: state.unbanked };
   return { ...state, phase: 'run_complete', trophies: [...state.trophies, ...state.unbanked], unbanked: [], namingPlayerId: null, runSummary, deadline: ctx.now + DURATIONS.runEnd };
+}
+/** Resolves every terminal failure through the one-per-run collection save. */
+function finishFailedRun(state: GameState, ctx: MinigameContext): GameState {
+  return state.runSaveTokens > 0 && state.unbanked.length > 0 ? enterRunSaved(state, ctx) : enterRunFailed(state, ctx);
+}
+function enterRunSaved(state: GameState, ctx: MinigameContext): GameState {
+  return {
+    ...state,
+    phase: 'run_saved',
+    runSaveTokens: state.runSaveTokens - 1,
+    namingPlayerId: null,
+    lastChance: null,
+    deadline: ctx.now + DURATIONS.runSaved,
+  };
 }
 function enterRunFailed(state: GameState, ctx: MinigameContext): GameState {
   const runSummary: RunSummary = { banked: false, rounds: state.round, plushies: state.unbanked };
@@ -419,7 +436,8 @@ function applyTick(state: GameState, ctx: MinigameContext): GameState {
       if (state.cruelty?.kind === 'the_sacrifice') return state.cruelty.stage === 'voting' ? resolveSacrificeVote(state, ctx) : enterStakes(setupRound({ ...state, cruelty: null }, ctx), ctx);
       return applyCrueltyChoice(state, state.cruelty?.chooserId ?? '', state.cruelty?.kind === 'the_deal' ? 'harder' : 'teeth', ctx);
     case 'stakes': return enterMpcVoting(state, ctx);
-    case 'last_chance': return enterRunFailed({ ...state, lastChance: state.lastChance ? { ...state.lastChance, outcome: 'failure' } : null }, ctx);
+    case 'last_chance': return finishFailedRun({ ...state, lastChance: state.lastChance ? { ...state.lastChance, outcome: 'failure' } : null }, ctx);
+    case 'run_saved': return enterRiskVoting(state, ctx);
     case 'run_complete':
     case 'run_failed': return beginRun(state, ctx);
     case 'lobby': return state;
@@ -464,6 +482,7 @@ export function projectFor(state: GameState, viewerId: string, now = 0): GameVie
     currentPlushie: state.currentPlushie, unbanked: state.unbanked, trophies: state.trophies, namingPlayerId: state.namingPlayerId,
     riskTally, yourRiskVote: state.riskVotes[viewerId] ?? null, activeEffects, cruelty: projectCruelty(state, viewerId),
     lastChance: state.lastChance?.outcome === 'pending' ? { playerId: state.lastChance.playerId, attemptId: state.lastChance.attemptId, windowMs: state.lastChance.windowMs } : null,
+    runSaveTokens: state.runSaveTokens,
     minigame: showMinigame && game ? { id: game.id, title: game.title, view: game.getStateForPlayer(state.minigameState, viewerId) } : null,
     outcome: state.outcome, runSummary: state.runSummary,
   };

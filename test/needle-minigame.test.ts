@@ -18,8 +18,8 @@ describe('Stop the Needle', () => {
   it('scales the required hits, period, zone, and budget within their floors', () => {
     const easy = stopTheNeedleGame.createInitialState(config, ctx(0)) as { requiredHits: number; mpcPeriodMs: number; baseZoneWidth: number; timeBudgetMs: number };
     const hard = stopTheNeedleGame.createInitialState({ ...config, difficulty: 30 }, ctx(0)) as typeof easy;
-    expect(easy).toMatchObject({ requiredHits: 3, mpcPeriodMs: 1500, baseZoneWidth: 0.2, timeBudgetMs: 15000 });
-    expect(hard).toMatchObject({ requiredHits: 6, mpcPeriodMs: 750, baseZoneWidth: 0.08, timeBudgetMs: 10000 });
+    expect(easy).toMatchObject({ requiredHits: 3, mpcPeriodMs: 1500, baseZoneWidth: 0.2, timeBudgetMs: 25000 });
+    expect(hard).toMatchObject({ requiredHits: 6, mpcPeriodMs: 750, baseZoneWidth: 0.08, timeBudgetMs: 20000 });
   });
 
   it('increments a correct stop and regenerates the MPC attempt', () => {
@@ -60,8 +60,8 @@ describe('Stop the Needle', () => {
 
   it('times out with a fixed fuse and does not project server start times', () => {
     const state = fresh();
-    expect(stopTheNeedleGame.getFuse!(state)).toEqual({ deadlineAt: 15000, totalMs: 15000 });
+    expect(stopTheNeedleGame.getFuse!(state)).toEqual({ deadlineAt: 25000, totalMs: 25000 });
     expect(stopTheNeedleGame.getStateForPlayer(state, 'm')).not.toHaveProperty('attempt.startedAt');
-    expect(stopTheNeedleGame.evaluate(stopTheNeedleGame.onDeadline(state, ctx(15000)), ctx(15000))).toMatchObject({ success: false });
+    expect(stopTheNeedleGame.evaluate(stopTheNeedleGame.onDeadline(state, ctx(25000)), ctx(25000))).toMatchObject({ success: false });
   });
 });

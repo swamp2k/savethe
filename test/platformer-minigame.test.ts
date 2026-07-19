@@ -84,8 +84,8 @@ describe('platformer: MPC reactions', () => {
 
   it('a plausible but too-slow correct response still fails the round', () => {
     const s = fresh();
-    // difficulty 1 -> obstacleWindowMs 1500; 1700ms is plausible but over the window.
-    const hit = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 1700 }, ctx(1700));
+    // difficulty 1 -> obstacleWindowMs 1800; 2000ms is plausible but over the window.
+    const hit = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 2000 }, ctx(2000));
     expect(platformerGame.evaluate(hit, ctx(0))).toMatchObject({ status: 'resolved', success: false });
   });
 
@@ -120,9 +120,9 @@ describe('platformer: MPC reactions', () => {
       obstacleWindowMs: number;
     };
     expect(easy.requiredObstacles).toBe(5);
-    expect(easy.obstacleWindowMs).toBe(1500);
+    expect(easy.obstacleWindowMs).toBe(1800);
     expect(hard.requiredObstacles).toBe(10); // capped
-    expect(hard.obstacleWindowMs).toBe(900); // floored
+    expect(hard.obstacleWindowMs).toBe(1100); // floored
   });
 
   it('always hides the generic countdown during the challenge', () => {

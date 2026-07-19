@@ -60,7 +60,7 @@ const MIN_MS_PER_SYMBOL = 400;
 
 /** Recall-phase budget, fixed rather than difficulty-scaled — sequence
  *  length and study speed above already carry the difficulty curve. */
-const TIME_BUDGET_MS = 15_000;
+const TIME_BUDGET_MS = 25_000;
 
 const SUPPORT_SEQUENCE_LENGTH = 3;
 const SUPPORT_REDUCTION_PER_COMPLETION = 1;

@@ -67,9 +67,9 @@ const MAX_OBSTACLES = 10;
 // obstacle arrived (jump vs duck) and pick the matching button, which takes
 // humans roughly 500-700ms before any device latency. The original 700ms
 // base window made round one nearly unwinnable.
-const BASE_WINDOW_MS = 1500;
+const BASE_WINDOW_MS = 1800;
 const WINDOW_STEP_MS = 75;
-const MIN_WINDOW_MS = 900;
+const MIN_WINDOW_MS = 1100;
 
 /** Extra server-side slack past the window before declaring a timeout. The
  *  pass/fail check is the client-measured `elapsedMs` vs the window (PLAN.md

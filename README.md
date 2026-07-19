@@ -69,9 +69,12 @@ rarity/value, and rarity-scaled ability. The round's saver names it before Bank/
 Abilities only work while their plushie remains unbanked: Brave Heart lowers future
 difficulty, Guardian reduces cruelty odds, Greedy Bastard boosts future values, and
 Lucky Charm improves Last Chance odds. A failed rescue may open a single Last Chance
-button challenge per run; its hero earns naming rights on success. The cruelty
-registry now includes The Sacrifice, a reconnect-safe group vote between the two most
-valuable at-risk plushies.
+button challenge per run; its hero earns naming rights on success. Every run also
+starts with one automatic **Run Save**: after a terminal failure, it preserves an
+existing unbanked collection once, but never revives the plushie that just failed.
+The group gets a six-second confirmation beat, then returns to Bank/Risk with no
+saves remaining. The cruelty registry now includes The Sacrifice, a reconnect-safe
+group vote between the two most valuable at-risk plushies.
 
 **Playtested with 2 real people** (PLAN.md originally called for 3+; the user
 confirmed 2-person testing is sufficient for their purposes) - it worked.

@@ -4,7 +4,7 @@ import { decodeClientMessage } from '../src/shared/protocol';
 import type { Plushie } from '../src/shared/game';
 import { braveReduction, greedyBonus, guardianReduction, luckyCharmBonus } from '../src/server/engine/abilities';
 import { pickCruelty, sacrificeCandidates } from '../src/server/engine/cruelty';
-import { DURATIONS, initialGameState, projectFor, reduce, type EnginePlayer, type GameState } from '../src/server/engine/engine';
+import { DURATIONS, initialGameState, normalizeGameState, projectFor, reduce, type EnginePlayer, type GameState } from '../src/server/engine/engine';
 import type { MinigameContext } from '../src/server/minigames/contract';
 
 const players: EnginePlayer[] = [
@@ -29,6 +29,13 @@ describe('Phase 2 protocol boundary', () => {
     expect(decodeClientMessage(JSON.stringify({ type: 'last_chance.hit', attemptId: 2, elapsedMs: 200 })).ok).toBe(true);
     expect(decodeClientMessage(JSON.stringify({ type: 'last_chance.hit', attemptId: -1, elapsedMs: 200 })).ok).toBe(false);
     expect(decodeClientMessage(JSON.stringify({ type: 'cruelty.sacrifice_vote', plushieId: 'p-1' })).ok).toBe(true);
+  });
+
+  it('validates both The Deal choices at the protocol boundary', () => {
+    expect(decodeClientMessage(JSON.stringify({ type: 'cruelty.choose', choice: 'sacrifice' })).ok).toBe(true);
+    expect(decodeClientMessage(JSON.stringify({ type: 'cruelty.choose', choice: 'harder' })).ok).toBe(true);
+    expect(decodeClientMessage(JSON.stringify({ type: 'cruelty.choose', choice: 'nuts' })).ok).toBe(true);
+    expect(decodeClientMessage(JSON.stringify({ type: 'cruelty.choose', choice: 'teeth' })).ok).toBe(true);
   });
 });
 
@@ -152,12 +159,90 @@ describe('Last Chance', () => {
     expect(state.phase).toBe('run_failed');
   });
 
+  it('keeps the run save when Last Chance succeeds', () => {
+    let state = apply(failedResolution(), { type: 'tick' }, 1_001, 0.99);
+    state = apply(state, { type: 'lastChanceHit', playerId: 'p2', attemptId: 1, elapsedMs: 200 }, 1_201);
+    expect(state.runSaveTokens).toBe(1);
+  });
+
   it('reassigns the attempt when the selected hero disconnects', () => {
     let state = apply(failedResolution(), { type: 'tick' }, 1_001, 0.99);
     state = apply(state, { type: 'syncPlayers', players: [players[0], { ...players[1], connected: false }] }, 1_010, 0.99);
     expect(state.phase).toBe('last_chance');
     expect(state.lastChance?.playerId).toBe('p1');
     expect(state.lastChance?.attemptId).toBe(2);
+  });
+});
+
+describe('Run Save', () => {
+  function failedCollection(unbanked: Plushie[], runSaveTokens = 1, lastChanceUsed = true): GameState {
+    const target = plushie('bubbles', 8);
+    return {
+      ...initialGameState(), phase: 'round_resolution', players, mpcId: 'p1', currentPlushie: target, unbanked,
+      outcome: { success: false, headline: 'Doomed', mpcId: 'p1', plushie: target }, deadline: 1_000,
+      runSaveTokens, lastChanceUsed,
+    };
+  }
+
+  it('starts each run with one token and restores the default for an older persisted room', () => {
+    let state = apply(initialGameState(), { type: 'syncPlayers', players }, 0);
+    state = apply(state, { type: 'start', byPlayerId: 'p1' }, 0);
+    expect(state.runSaveTokens).toBe(1);
+    const oldState = { ...initialGameState(), runSaveTokens: undefined } as unknown as GameState;
+    expect(normalizeGameState(oldState).runSaveTokens).toBe(1);
+    expect(projectFor(state, 'p1').runSaveTokens).toBe(1);
+  });
+
+  it('does not consume a token when the run has no collection to protect', () => {
+    const next = apply(failedCollection([]), { type: 'tick' }, 1_001);
+    expect(next.phase).toBe('run_failed');
+    expect(next.runSaveTokens).toBe(1);
+  });
+
+  it('protects the existing collection, not the plushie that just failed', () => {
+    const next = apply(failedCollection([plushie('kevin', 4), plushie('waddles', 2)]), { type: 'tick' }, 1_001);
+    expect(next.phase).toBe('run_saved');
+    expect(next.runSaveTokens).toBe(0);
+    expect(next.unbanked.map((item) => item.id)).toEqual(['kevin', 'waddles']);
+    expect(next.unbanked.some((item) => item.id === 'bubbles')).toBe(false);
+  });
+
+  it('moves from the saved beat into Bank/Risk and then supports either choice', () => {
+    let state = apply(failedCollection([plushie('kevin', 4)]), { type: 'tick' }, 1_001);
+    state = apply(state, { type: 'tick' }, state.deadline! + 1);
+    expect(state.phase).toBe('risk_voting');
+    state = apply(state, { type: 'riskVote', voterId: 'p1', choice: 'bank' }, 8_000);
+    state = apply(state, { type: 'riskVote', voterId: 'p2', choice: 'bank' }, 8_000);
+    expect(state.phase).toBe('run_complete');
+    expect(state.trophies.map((item) => item.id)).toEqual(['kevin']);
+
+    state = apply(failedCollection([plushie('waddles', 2)]), { type: 'tick' }, 1_001);
+    state = apply(state, { type: 'tick' }, state.deadline! + 1);
+    state = apply(state, { type: 'riskVote', voterId: 'p1', choice: 'risk' }, 8_000, 0);
+    state = apply(state, { type: 'riskVote', voterId: 'p2', choice: 'risk' }, 8_000, 0);
+    expect(state.phase).toBe('stakes');
+    expect(state.runSaveTokens).toBe(0);
+  });
+
+  it('turns a second collection failure into a normal catastrophic loss', () => {
+    const next = apply(failedCollection([plushie('kevin', 4)], 0), { type: 'tick' }, 1_001);
+    expect(next.phase).toBe('run_failed');
+    expect(next.unbanked).toEqual([]);
+    expect(next.runSummary?.plushies.map((item) => item.id)).toEqual(['kevin']);
+  });
+
+  it('resets the token for the next run after a run ends', () => {
+    const ended = { ...initialGameState(), phase: 'run_complete' as const, players, runSaveTokens: 0, deadline: 1_000 };
+    const next = apply(ended, { type: 'tick' }, 1_001);
+    expect(next.runSaveTokens).toBe(1);
+  });
+
+  it('uses the Run Save after a failed Last Chance', () => {
+    let state = apply(failedCollection([plushie('kevin', 4)], 1, false), { type: 'tick' }, 1_001, 0.99);
+    expect(state.phase).toBe('last_chance');
+    state = apply(state, { type: 'lastChanceHit', playerId: 'p2', attemptId: 1, elapsedMs: 901 }, 1_902);
+    expect(state.phase).toBe('run_saved');
+    expect(state.runSaveTokens).toBe(0);
   });
 });
 
@@ -201,5 +286,46 @@ describe('The Sacrifice', () => {
     let state = sacrificeState();
     state = apply(state, { type: 'tick' }, 10_001, 0.99);
     expect(state.unbanked.map((item) => item.id)).toEqual(['low', 'same-a']);
+  });
+});
+
+describe('The Deal routing', () => {
+  function dealState(): GameState {
+    const hostage = plushie('bubbles', 8);
+    return {
+      ...initialGameState(), phase: 'cruelty_event', players, previousMpcId: 'p1', unbanked: [hostage],
+      cruelty: { kind: 'the_deal', chooserId: 'p2', hostagePlushieId: hostage.id }, deadline: 10_000,
+    };
+  }
+
+  it('routes sacrifice through the engine and removes only the hostage', () => {
+    const state = dealState();
+    const next = apply(state, { type: 'crueltyChoice', playerId: 'p2', choice: 'sacrifice' }, 1_000);
+    expect(next.phase).toBe('stakes');
+    expect(next.unbanked).toEqual([]);
+    expect(next.runSaveTokens).toBe(1);
+  });
+
+  it('routes harder through the engine and preserves the hostage', () => {
+    const state = dealState();
+    const next = apply(state, { type: 'crueltyChoice', playerId: 'p2', choice: 'harder' }, 1_000);
+    expect(next.phase).toBe('stakes');
+    expect(next.unbanked.map((item) => item.id)).toEqual(['bubbles']);
+    expect(next.roundModifiers.difficultyBonus).toBe(2);
+    // Bubbles' existing Brave Heart remains active, so it offsets one point
+    // of the Deal's explicit +2 difficulty modifier.
+    expect(next.difficulty).toBe(2);
+    expect(next.runSaveTokens).toBe(1);
+  });
+
+  it('does not spend the Run Save token for either Nuts or Teeth', () => {
+    for (const choice of ['nuts', 'teeth'] as const) {
+      const state: GameState = {
+        ...initialGameState(), phase: 'cruelty_event', players, unbanked: [plushie('bubbles', 8)],
+        cruelty: { kind: 'nuts_or_teeth', chooserId: 'p2' }, deadline: 10_000,
+      };
+      const next = apply(state, { type: 'crueltyChoice', playerId: 'p2', choice }, 1_000);
+      expect(next.runSaveTokens).toBe(1);
+    }
   });
 });

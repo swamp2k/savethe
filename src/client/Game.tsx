@@ -9,6 +9,7 @@ import { PlushieShowcase } from './PlushieShowcase';
 import { PlushieInspector } from './PlushieInspector';
 import { getMinigameUI } from './minigames/registry';
 import { playSound, useMuted } from './sound';
+import { VisualChoiceButton } from './VisualChoiceButton';
 
 const EMOTE_EMOJI: Record<EmoteKind, string> = { heart: '❤️', panic: '😱', tomato: '🍅' };
 
@@ -19,7 +20,18 @@ export function Game({ conn, view }: { conn: Connection; view: GameView }) {
   return (
     <div className="game">
       <Hud conn={conn} view={view} nameOf={nameOf} />
-      <PhasePanel conn={conn} view={view} nameOf={nameOf} />
+      <div className="phase-shell">
+        <div className="phase-shell__content" inert={!conn.canSend}>
+          <PhasePanel conn={conn} view={view} nameOf={nameOf} />
+        </div>
+        {!conn.canSend && (
+          <div className="connection-blocker" role="status" aria-live="polite">
+            <span className="connection-blocker__icon" aria-hidden="true">🔌</span>
+            <strong>RECONNECTING…</strong>
+            <span>Please wait.</span>
+          </div>
+        )}
+      </div>
       <EmoteOverlay emotes={conn.emotes} />
       {conn.status === 'reconnecting' && <p className="hint center">Reconnecting…</p>}
       {conn.error && <p className="error center">{conn.error}</p>}
@@ -28,7 +40,7 @@ export function Game({ conn, view }: { conn: Connection; view: GameView }) {
 }
 
 function Hud({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf: (id: string | null) => string }) {
-  const inRun = view.phase !== 'lobby';
+  const inRun = !['lobby', 'run_complete', 'run_failed'].includes(view.phase);
   const [muted, setMuted] = useMuted();
   return (
     <div className="hud">
@@ -40,6 +52,7 @@ function Hud({ conn, view, nameOf }: { conn: Connection; view: GameView; nameOf:
             {MACHINES[view.machine].emoji} {MACHINES[view.machine].label}
           </span>
         )}
+        {inRun && <span className={`chip chip--run-save ${view.runSaveTokens === 0 ? 'chip--run-save-used' : ''}`}>🛟 RUN SAVE ×{view.runSaveTokens}</span>}
         {view.mpcId && <span className="chip chip--mpc">MPC: {nameOf(view.mpcId)}</span>}
         <button
           className="btn btn--ghost btn--small hud__mute"
@@ -73,6 +86,7 @@ function EmoteBar({ conn }: { conn: Connection }) {
           className="emote-bar__btn"
           onClick={() => conn.sendEmote(kind)}
           aria-label={`Send ${kind} emote`}
+          disabled={!conn.canSend}
         >
           {EMOTE_EMOJI[kind]}
         </button>
@@ -175,6 +189,8 @@ function PhasePanel({
       return <Stakes view={view} />;
     case 'last_chance':
       return <LastChance conn={conn} view={view} nameOf={nameOf} />;
+    case 'run_saved':
+      return <RunSaved view={view} />;
     case 'run_complete':
     case 'run_failed':
       return <RunOver view={view} />;
@@ -197,7 +213,7 @@ function CrueltyEventPanel({ conn, view, nameOf }: { conn: Connection; view: Gam
     <h2 className="panel__title">{event.kind === 'the_deal' ? 'THE DEAL' : `BAD NEWS, ${nameOf(event.chooserId)}.`}</h2>
     {hostage && <PlushieShowcase plushie={hostage} mood="😨" animation="idle" machine={view.machine} />}
     <p className="hint center">{chooser ? 'Choose your pain.' : `Waiting for ${nameOf(event.chooserId)} to choose...`}</p>
-    {event.kind === 'the_deal' ? <div className="actions__row"><button className="btn btn--bank" disabled={!chooser} onClick={() => conn.chooseCruelty('sacrifice')}>SACRIFICE IT</button><button className="btn btn--risk" disabled={!chooser} onClick={() => conn.chooseCruelty('harder')}>MAKE IT HARDER (+2)</button></div> : <div className="actions__row"><button className="btn btn--risk" disabled={!chooser} onClick={() => conn.chooseCruelty('nuts')}>NUTS: I am MPC (+1)</button><button className="btn btn--bank" disabled={!chooser} onClick={() => conn.chooseCruelty('teeth')}>TEETH: no support</button></div>}
+    {event.kind === 'the_deal' ? <div className="actions__row"><VisualChoiceButton className="visual-choice--sacrifice" disabled={!chooser} icon={`💀 ${hostage?.emoji ?? '🧸'}`} title="SACRIFICE" detail={hostage?.name ?? 'THIS PLUSHIE'} ariaLabel={`Sacrifice ${hostage?.name ?? 'this plushie'}`} onClick={() => conn.chooseCruelty('sacrifice')} /><VisualChoiceButton className="btn--risk" disabled={!chooser} icon="🔥 🔥" title="+2 HARDER" detail={`KEEP ${hostage?.name?.toUpperCase() ?? 'THE PLUSHIE'}`} onClick={() => conn.chooseCruelty('harder')} /></div> : <div className="actions__row"><VisualChoiceButton className="btn--risk" disabled={!chooser} icon="🎯 👤" title="NUTS" detail="YOU ARE MPC +1" onClick={() => conn.chooseCruelty('nuts')} /><VisualChoiceButton className="visual-choice--teeth" disabled={!chooser} icon="🚫 🤝" title="TEETH" detail="NO SUPPORT" onClick={() => conn.chooseCruelty('teeth')} /></div>}
   </div>;
 }
 
@@ -463,24 +479,8 @@ function RiskVoting({ conn, view }: { conn: Connection; view: GameView }) {
       <Shelf label="Currently at risk" plushies={view.unbanked} danger empty="—" />
       <ActiveEffects effects={view.activeEffects} />
       <div className="actions__row">
-        <button
-          className={`btn btn--bank ${view.yourRiskVote === 'bank' ? 'btn--chosen' : ''}`}
-          onClick={() => {
-            playSound('click');
-            conn.voteRisk('bank');
-          }}
-        >
-          BANK ({view.riskTally.bank})
-        </button>
-        <button
-          className={`btn btn--risk ${view.yourRiskVote === 'risk' ? 'btn--chosen' : ''}`}
-          onClick={() => {
-            playSound('click');
-            conn.voteRisk('risk');
-          }}
-        >
-          RISK ({view.riskTally.risk})
-        </button>
+        <VisualChoiceButton className={`btn--bank ${view.yourRiskVote === 'bank' ? 'btn--chosen' : ''}`} icon="🔒 🏆" title="BANK" detail={`${totalValue(view.unbanked)}★ SAFE · ${view.riskTally.bank} votes`} onClick={() => { playSound('click'); conn.voteRisk('bank'); }} />
+        <VisualChoiceButton className={`btn--risk ${view.yourRiskVote === 'risk' ? 'btn--chosen' : ''}`} icon="🔥 🎲" title="RISK" detail={`${totalValue(view.unbanked)}★ AT RISK · ${view.riskTally.risk} votes`} onClick={() => { playSound('click'); conn.voteRisk('risk'); }} />
       </div>
       <p className="hint center">Bank secures them forever but ends their active abilities. Risk keeps their abilities active — and keeps them in danger.</p>
     </div>
@@ -534,6 +534,21 @@ function RunOver({ view }: { view: GameView }) {
         <Shelf label={banked ? '🎉 Banked' : '💔 Lost'} plushies={summary.plushies} danger={!banked} big />
       )}
       <p className="hint center">A fresh run starts in a moment…</p>
+    </div>
+  );
+}
+
+function RunSaved({ view }: { view: GameView }) {
+  const failed = view.outcome?.plushie;
+  const value = totalValue(view.unbanked);
+  return (
+    <div className="panel center-panel run-saved">
+      <Timer remainingMs={view.deadlineRemainingMs} />
+      <div className="big-reveal good">RUN SAVED!</div>
+      <p className="run-summary__value good">{value}★ STILL ALIVE</p>
+      {failed && <p className="hint center">{failed.name} was lost, but your collection survives.</p>}
+      <Shelf label="😰 Still at risk" plushies={view.unbanked} danger empty="—" />
+      <p className="hint center">🛟 Run Save used. No saves remain.</p>
     </div>
   );
 }

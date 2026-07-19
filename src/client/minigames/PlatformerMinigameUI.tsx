@@ -18,6 +18,7 @@ interface PlatformerView {
 
 const OBSTACLE_LABEL: Record<'jump' | 'duck', string> = { jump: 'JUMP!', duck: 'DUCK!' };
 const OBSTACLE_EMOJI: Record<'jump' | 'duck', string> = { jump: '🪨', duck: '🪵' };
+const ACTION_ICON: Record<'jump' | 'duck', string> = { jump: '⬆️', duck: '⬇️' };
 
 /** One-line how-to, always visible: playtesting showed a lone obstacle emoji
  *  in an empty lane reads as "…now what?" without it. */
@@ -27,6 +28,10 @@ function Legend() {
       🪨 rock → <strong>JUMP</strong> over it &nbsp;·&nbsp; 🪵 log → <strong>DUCK</strong> under it
     </p>
   );
+}
+
+function ActionCue({ action }: { action: 'jump' | 'duck' }) {
+  return <div className={`platformer-action-cue platformer-action-cue--${action}`}><span aria-hidden="true">{action === 'jump' ? '🧸 ⬆️ 🪨' : '🪵 ━━━ 🧸 ⬇️'}</span><strong>{OBSTACLE_LABEL[action]}</strong></div>;
 }
 
 /**
@@ -145,11 +150,11 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
 
   const buttons = (
     <div className="actions__row">
-      <button className="btn btn--primary" onClick={() => react('jump')}>
-        {OBSTACLE_LABEL.jump}
+      <button className="btn btn--primary platformer-action-button" onClick={() => react('jump')}>
+        <span aria-hidden="true">{ACTION_ICON.jump}</span>{OBSTACLE_LABEL.jump}
       </button>
-      <button className="btn btn--primary" onClick={() => react('duck')}>
-        {OBSTACLE_LABEL.duck}
+      <button className="btn btn--primary platformer-action-button" onClick={() => react('duck')}>
+        <span aria-hidden="true">{ACTION_ICON.duck}</span>{OBSTACLE_LABEL.duck}
       </button>
     </div>
   );
@@ -161,6 +166,7 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
           {mg.obstaclesCleared} / {mg.requiredObstacles} cleared
         </p>
         <Legend />
+        {mg.obstacleType && <ActionCue action={mg.obstacleType} />}
         {lane(
           mg.obstacleType && (
             <span key={obstacleId} className="platformer-obstacle" style={{ animationDuration: `${mg.obstacleWindowMs}ms` }}>
@@ -182,6 +188,7 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
           Clear your own obstacle to shorten {nameOf(view.mpcId)}&rsquo;s run! ({mg.supportClears} cleared)
         </p>
         <Legend />
+        {mg.myObstacleType && <ActionCue action={mg.myObstacleType} />}
         {lane(
           mg.myObstacleType && (
             <span className="platformer-obstacle platformer-obstacle--static">{OBSTACLE_EMOJI[mg.myObstacleType]}</span>

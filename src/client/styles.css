@@ -632,6 +632,32 @@ h3,
 }
 
 /* --- Phase panels --- */
+.phase-shell {
+  position: relative;
+}
+.chip--run-save { border-color: rgba(116, 221, 255, 0.8); color: #b7f1ff; }
+.chip--run-save-used { opacity: 0.55; border-color: rgba(255, 255, 255, 0.25); color: var(--muted); }
+
+.connection-blocker {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius);
+  background: rgba(18, 8, 38, 0.82);
+  backdrop-filter: blur(3px);
+  color: var(--text);
+  text-align: center;
+}
+
+.connection-blocker__icon {
+  font-size: 3rem;
+}
+
 .panel__title {
   margin: 0;
   text-align: center;
@@ -849,6 +875,7 @@ h3,
 .run-summary__value { font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 900; text-align: center; }
 .run-summary__value.good { color: var(--ok); text-shadow: 0 0 24px rgba(74, 222, 128, 0.4); }
 .run-summary__value.bad { color: var(--danger); text-shadow: 0 0 24px rgba(255, 107, 107, 0.4); }
+.run-saved .shelf { width: min(100%, 42rem); }
 @keyframes legendary-shimmer { to { filter: brightness(1.35); } }
 
 @keyframes bomb-rattle {
@@ -1027,6 +1054,38 @@ h3,
 
 .actions__row .btn {
   flex: 1;
+}
+
+.visual-choice {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.25rem;
+  min-height: 6rem;
+  text-align: center;
+}
+
+.visual-choice__icon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.visual-choice__detail {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.visual-choice--sacrifice,
+.visual-choice--teeth {
+  background: linear-gradient(135deg, #ff6b6b, #c81e1e);
+  color: #fff;
+  box-shadow: 0 5px 0 #8f1414;
+}
+
+.visual-choice--sacrifice:active:not(:disabled),
+.visual-choice--teeth:active:not(:disabled) {
+  box-shadow: 0 2px 0 #8f1414;
 }
 
 .btn--save {
@@ -1333,7 +1392,8 @@ h3,
 
 /* --- Wire Panic --- */
 .wire-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; width: 100%; }
-.wire-button { min-height: 4rem; border: 3px solid currentColor; border-radius: var(--radius-small); background: var(--bg-inset); color: var(--text); font: inherit; font-weight: 900; letter-spacing: 0.08em; cursor: pointer; }
+.wire-button { display: grid; justify-items: center; gap: 0.25rem; min-height: 5rem; border: 3px solid currentColor; border-radius: var(--radius-small); background: var(--bg-inset); color: var(--text); font: inherit; font-weight: 900; letter-spacing: 0.08em; cursor: pointer; }
+.wire-button__icon { font-size: 1.8rem; line-height: 1; }
 .wire-button--red { color: #ff7373; }
 .wire-button--blue { color: #70b7ff; }
 .wire-button--green { color: #73e69e; }
@@ -1341,6 +1401,7 @@ h3,
 .wire-clues { display: grid; gap: 0.35rem; width: min(100%, 420px); padding: 1rem; border-radius: var(--radius-small); background: var(--bg-inset); text-align: center; font-weight: 800; }
 .wire-clues--support { font-size: 1.4rem; color: var(--accent-2); }
 .wire-clues em { color: var(--text); font-size: 0.85rem; font-style: normal; letter-spacing: 0.08em; }
+.wire-clue { display: grid; justify-items: center; gap: 0.1rem; }
 .spelling-word, .spelling-mask { margin: 0; text-align: center; font-family: var(--font-display); font-size: clamp(1.7rem, 7vw, 3rem); font-weight: 800; letter-spacing: 0.08em; word-break: break-word; }
 .spelling-mask { color: var(--accent-2); }
 .spelling-form, .spelling-support { display: grid; gap: 0.7rem; width: min(100%, 480px); text-align: center; }
@@ -1498,6 +1559,11 @@ h3,
   left: 60%;
   animation: none;
 }
+
+.platformer-action-cue { display: grid; justify-items: center; gap: 0.1rem; font-size: 1.55rem; font-weight: 900; }
+.platformer-action-cue strong { font-size: 1rem; }
+.platformer-action-button { display: flex; align-items: center; justify-content: center; gap: 0.4rem; }
+.platformer-action-button span { font-size: 2rem; line-height: 1; }
 
 @keyframes platformer-approach {
   0% {

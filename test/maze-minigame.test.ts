@@ -33,6 +33,11 @@ function wallFromStart(state: unknown): Direction {
 }
 
 describe('Blind Maze', () => {
+  it('keeps a 26-second floor at high difficulty', () => {
+    const hard = blindMazeGame.createInitialState({ ...config, difficulty: 99 }, ctx(0)) as { timeBudgetMs: number };
+    expect(hard.timeBudgetMs).toBe(26_000);
+  });
+
   it('creates deterministic, odd, solvable mazes with open start and goal', () => {
     expect([mazeSizeForDifficulty(1), mazeSizeForDifficulty(3), mazeSizeForDifficulty(5)]).toEqual([7, 9, 11]);
     const first = generateMaze(9, () => 0.3);
@@ -62,7 +67,7 @@ describe('Blind Maze', () => {
     expect(blindMazeGame.evaluate(state, ctx(0))).toMatchObject({ success: true });
     const untouched = fresh();
     expect(blindMazeGame.handleSupportAction(untouched, 's', { kind: 'move', direction: 'right' }, ctx(1))).toBe(untouched);
-    expect(blindMazeGame.evaluate(blindMazeGame.onDeadline(untouched, ctx(26000)), ctx(26000))).toMatchObject({ success: false });
+    expect(blindMazeGame.evaluate(blindMazeGame.onDeadline(untouched, ctx(36000)), ctx(36000))).toMatchObject({ success: false });
   });
 
   it('preserves asymmetric projections and a fixed fuse, including no-support rounds', () => {
@@ -75,7 +80,7 @@ describe('Blind Maze', () => {
     expect(mpc.grid).toBeUndefined();
     expect(support.grid).toBeDefined();
     expect(spectator.grid).toBeUndefined();
-    expect(blindMazeGame.getFuse!(state)).toEqual({ deadlineAt: 26000, totalMs: 26000 });
+    expect(blindMazeGame.getFuse!(state)).toEqual({ deadlineAt: 36000, totalMs: 36000 });
     const solo = fresh({ ...config, supportIds: [] });
     expect(pathToGoal(solo)).not.toHaveLength(0);
   });
