@@ -188,7 +188,7 @@ function CrueltyEventPanel({ conn, view, nameOf }: { conn: Connection; view: Gam
     const candidates = event.candidateIds.map((id) => view.unbanked.find((plushie) => plushie.id === id)).filter((plushie): plushie is Plushie => plushie !== undefined);
     const victim = event.sacrificedPlushie ?? null;
     if (event.stage === 'resolved') return <div className="panel center-panel cruelty-panel"><Timer remainingMs={view.deadlineRemainingMs} /><h2 className="panel__title">YOU CHOSE POORLY.</h2>{victim ? <PlushieShowcase plushie={victim} mood="😵" animation="gesture-negative" machine={view.machine} /> : <p className="big-reveal bad">The sacrifice is complete.</p>}<p className="hint center">{victim ? `${victim.name} has been sacrificed.` : 'The machine has taken its tribute.'}</p></div>;
-    return <div className="panel center-panel cruelty-panel"><Timer remainingMs={view.deadlineRemainingMs} /><h2 className="panel__title">THE SACRIFICE</h2><p className="hint center">The machine demands one. Vote for the plushie that does not leave.</p><div className="sacrifice-grid">{candidates.map((plushie) => <button key={plushie.id} className={`sacrifice-card ${event.yourVote === plushie.id ? 'sacrifice-card--mine' : ''}`} onClick={() => conn.voteSacrifice(plushie.id)}><span className="sacrifice-card__emoji">{plushie.emoji}</span><strong>{plushie.name}</strong><span>{plushie.rarity.toUpperCase()} · {plushie.value}★</span><span>{abilityLabel(plushie)}</span><span className="vote-btn__count">{event.voteTally[plushie.id] ?? 0} votes</span><span>SACRIFICE</span></button>)}</div></div>;
+    return <div className="panel center-panel cruelty-panel"><Timer remainingMs={view.deadlineRemainingMs} /><h2 className="panel__title">THE SACRIFICE</h2><p className="hint center">SACRIFICE REQUIRED. PICK ONE.</p><div className="sacrifice-grid">{candidates.map((plushie) => <button key={plushie.id} className={`sacrifice-card ${event.yourVote === plushie.id ? 'sacrifice-card--mine' : ''}`} onClick={() => conn.voteSacrifice(plushie.id)}><span className="sacrifice-card__emoji">{plushie.emoji}</span><strong>{plushie.name}</strong><span>{plushie.rarity.toUpperCase()} · {plushie.value}★</span><span>{abilityLabel(plushie)}</span><span className="vote-btn__count">{event.voteTally[plushie.id] ?? 0} votes</span><span>SACRIFICE</span></button>)}</div></div>;
   }
   const chooser = event.chooserId === view.youId;
   const hostage = event.kind === 'the_deal' ? view.unbanked.find((p) => p.id === event.hostagePlushieId) : undefined;
@@ -461,6 +461,7 @@ function RiskVoting({ conn, view }: { conn: Connection; view: GameView }) {
       <h2 className="panel__title">Bank or Risk?</h2>
       <p className="typing-progress">Current pot: {totalValue(view.unbanked)}★</p>
       <Shelf label="Currently at risk" plushies={view.unbanked} danger empty="—" />
+      <ActiveEffects effects={view.activeEffects} />
       <div className="actions__row">
         <button
           className={`btn btn--bank ${view.yourRiskVote === 'bank' ? 'btn--chosen' : ''}`}
@@ -481,7 +482,25 @@ function RiskVoting({ conn, view }: { conn: Connection; view: GameView }) {
           RISK ({view.riskTally.risk})
         </button>
       </div>
-      <p className="hint center">Bank secures them forever. Risk keeps them exposed for a harder round.</p>
+      <p className="hint center">Bank secures them forever but ends their active abilities. Risk keeps their abilities active — and keeps them in danger.</p>
+    </div>
+  );
+}
+
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function ActiveEffects({ effects }: { effects: GameView['activeEffects'] }) {
+  if (!effects.brave && !effects.guardian && !effects.greedy && !effects.lucky) return null;
+
+  return (
+    <div className="active-effects">
+      <h3 className="active-effects__title">ACTIVE WHILE YOU RISK</h3>
+      {effects.brave && <div className="active-effect"><strong>❤️‍🔥 Brave Heart</strong><span>Next challenge difficulty: {effects.brave.baseDifficulty} → {effects.brave.effectiveDifficulty}</span></div>}
+      {effects.guardian && <div className="active-effect"><strong>🛡️ Guardian</strong><span>Cruelty chance: {percent(effects.guardian.baseChance)} → {percent(effects.guardian.effectiveChance)}</span></div>}
+      {effects.greedy && <div className="active-effect"><strong>🤑 Greedy Bastard</strong><span>Next rescue: +{effects.greedy.bonus}★</span></div>}
+      {effects.lucky && <div className="active-effect"><strong>🍀 Lucky Charm</strong><span>Last Chance chance: {percent(effects.lucky.baseChance)} → {percent(effects.lucky.effectiveChance)}</span></div>}
     </div>
   );
 }
@@ -501,17 +520,16 @@ function Stakes({ view }: { view: GameView }) {
 function RunOver({ view }: { view: GameView }) {
   const summary = view.runSummary;
   const banked = view.phase === 'run_complete';
+  const total = summary ? totalValue(summary.plushies) : 0;
   return (
     <div className="panel center-panel">
       <Timer remainingMs={view.deadlineRemainingMs} />
       <div className={`big-reveal ${banked ? 'good' : 'bad'}`}>{banked ? 'Banked!' : 'Run over'}</div>
-      <p className="hint center">
-        {summary
-          ? banked
-            ? `Secured ${summary.plushies.length} plushie(s) over ${summary.rounds} round(s).`
-            : `Lost ${summary.plushies.length} plushie(s) after ${summary.rounds} round(s).`
-          : ''}
-      </p>
+      {summary && summary.plushies.length > 0 ? <>
+        <p className="run-summary__count">{banked ? `${summary.plushies.length} plushies secured` : `${summary.plushies.length} plushies lost`}</p>
+        <div className={`run-summary__value ${banked ? 'good' : 'bad'}`}>{total}★ {banked ? 'BANKED' : 'GONE'}</div>
+        <p className="hint center">{summary.rounds} round(s) played.</p>
+      </> : <p className="hint center">Nothing was banked.</p>}
       {summary && summary.plushies.length > 0 && (
         <Shelf label={banked ? '🎉 Banked' : '💔 Lost'} plushies={summary.plushies} danger={!banked} big />
       )}

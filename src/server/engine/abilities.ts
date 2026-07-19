@@ -1,4 +1,4 @@
-import type { Plushie } from '../../shared/game';
+import type { ActiveEffectsView, Plushie } from '../../shared/game';
 
 export function activeAbilities(plushies: Plushie[]): Plushie[] {
   return plushies;
@@ -24,4 +24,27 @@ export function greedyBonus(plushies: Plushie[]): number {
 
 export function luckyCharmBonus(plushies: Plushie[]): number {
   return Math.min(0.30, totalPower(plushies, 'lucky_charm') * 0.10);
+}
+
+/** Projects the gameplay ability math for the Bank/Risk decision. */
+export function activeEffectsView(
+  plushies: Plushie[],
+  nextRound: number,
+  difficultyBonus: number,
+  currentRound: number,
+): ActiveEffectsView {
+  const brave = braveReduction(plushies);
+  const guardian = guardianReduction(plushies);
+  const greedy = greedyBonus(plushies);
+  const lucky = luckyCharmBonus(plushies);
+  const baseDifficulty = nextRound + difficultyBonus;
+  const baseChance = currentRound >= 4 ? 0.65 : 0.25 + currentRound * 0.1;
+  const lastChanceBase = 0.35;
+
+  return {
+    brave: brave > 0 ? { reduction: brave, baseDifficulty, effectiveDifficulty: Math.max(1, baseDifficulty - brave) } : null,
+    guardian: guardian > 0 ? { reduction: guardian, baseChance, effectiveChance: Math.max(0.10, baseChance - guardian) } : null,
+    greedy: greedy > 0 ? { bonus: greedy } : null,
+    lucky: lucky > 0 ? { bonus: lucky, baseChance: lastChanceBase, effectiveChance: Math.min(0.75, lastChanceBase + lucky) } : null,
+  };
 }

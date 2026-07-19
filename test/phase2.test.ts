@@ -63,6 +63,53 @@ describe('attachment and abilities', () => {
     expect(abilityPowerForRarity('rare')).toBe(2);
     expect(abilityPowerForRarity('legendary')).toBe(3);
   });
+
+  it('projects no active effects without unbanked abilities', () => {
+    const view = projectFor({ ...initialGameState(), phase: 'risk_voting', players, round: 1 }, 'p1');
+    expect(view.activeEffects).toEqual({ brave: null, guardian: null, greedy: null, lucky: null });
+  });
+
+  it('projects active effects from the gameplay ability helpers with their floors and caps', () => {
+    const state: GameState = {
+      ...initialGameState(),
+      phase: 'risk_voting',
+      players,
+      round: 3,
+      roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false },
+      unbanked: [
+        plushie('brave', 1, 'brave_heart', 2),
+        plushie('guardian', 1, 'guardian', 2),
+        plushie('greedy', 1, 'greedy_bastard', 2),
+        plushie('lucky', 1, 'lucky_charm', 2),
+      ],
+    };
+    const effects = projectFor(state, 'p1').activeEffects;
+    expect(effects.brave).toEqual({ reduction: 2, baseDifficulty: 4, effectiveDifficulty: 2 });
+    expect(effects.guardian).toMatchObject({ reduction: 0.1, baseChance: 0.55 });
+    expect(effects.guardian?.effectiveChance).toBeCloseTo(0.45);
+    expect(effects.greedy).toEqual({ bonus: 2 });
+    expect(effects.lucky).toEqual({ bonus: 0.2, baseChance: 0.35, effectiveChance: 0.55 });
+
+    const roundTwoGuardian = projectFor({ ...state, round: 2 }, 'p1').activeEffects.guardian;
+    expect(roundTwoGuardian).toMatchObject({ reduction: 0.1, baseChance: 0.45 });
+    expect(roundTwoGuardian?.effectiveChance).toBeCloseTo(0.35);
+
+    const capped = projectFor({
+      ...state,
+      round: 1,
+      unbanked: [
+        plushie('brave-cap', 1, 'brave_heart', 3),
+        plushie('guardian-cap', 1, 'guardian', 8),
+        plushie('greedy-cap', 1, 'greedy_bastard', 8),
+        plushie('lucky-cap', 1, 'lucky_charm', 8),
+      ],
+    }, 'p1').activeEffects;
+    expect(capped.brave).toEqual({ reduction: 3, baseDifficulty: 2, effectiveDifficulty: 1 });
+    expect(capped.guardian).toEqual({ reduction: 0.25, baseChance: 0.35, effectiveChance: 0.1 });
+    expect(capped.greedy).toEqual({ bonus: 6 });
+    expect(capped.lucky).toMatchObject({ bonus: 0.3, baseChance: 0.35 });
+    expect(capped.lucky?.effectiveChance).toBeCloseTo(0.65);
+  });
 });
 
 describe('Last Chance', () => {

@@ -841,6 +841,14 @@ h3,
 .sacrifice-card { display: flex; flex-direction: column; gap: 0.35rem; align-items: center; padding: 1rem 0.5rem; border: 2px solid var(--danger); border-radius: var(--radius-small); background: var(--bg-inset); color: var(--text); cursor: pointer; font: inherit; }
 .sacrifice-card:hover, .sacrifice-card--mine { border-color: var(--accent-2); box-shadow: 0 0 0 4px rgba(255, 210, 63, 0.15); }
 .sacrifice-card__emoji { font-size: 3rem; }
+.active-effects { width: min(100%, 560px); display: grid; gap: 0.5rem; padding: 0.8rem; border-radius: var(--radius-small); background: var(--bg-inset); }
+.active-effects__title { margin: 0; text-align: center; font-size: 0.85rem; letter-spacing: 0.08em; }
+.active-effect { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+.active-effect strong { white-space: nowrap; }
+.run-summary__count { margin: 0; font-weight: 700; }
+.run-summary__value { font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 900; text-align: center; }
+.run-summary__value.good { color: var(--ok); text-shadow: 0 0 24px rgba(74, 222, 128, 0.4); }
+.run-summary__value.bad { color: var(--danger); text-shadow: 0 0 24px rgba(255, 107, 107, 0.4); }
 @keyframes legendary-shimmer { to { filter: brightness(1.35); } }
 
 @keyframes bomb-rattle {

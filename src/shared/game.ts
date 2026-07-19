@@ -85,6 +85,14 @@ export type CrueltyView =
 export interface RoundModifiers { difficultyBonus: number; forcedMpcId: string | null; disableSupport: boolean; }
 export interface LastChanceView { playerId: string; attemptId: number; windowMs: number; }
 
+/** Read-only summary of abilities that remain active while a run is at risk. */
+export interface ActiveEffectsView {
+  brave: { reduction: number; baseDifficulty: number; effectiveDifficulty: number } | null;
+  guardian: { reduction: number; baseChance: number; effectiveChance: number } | null;
+  greedy: { bonus: number } | null;
+  lucky: { bonus: number; baseChance: number; effectiveChance: number } | null;
+}
+
 /**
  * Everything one specific viewer is allowed to see. Different players can get
  * different views (per-player projection, architecture rule 4) — notably the
@@ -127,6 +135,7 @@ export interface GameView {
   // Bank / Risk
   riskTally: { bank: number; risk: number };
   yourRiskVote: 'bank' | 'risk' | null;
+  activeEffects: ActiveEffectsView;
   cruelty: CrueltyView | null;
   lastChance: LastChanceView | null;
 

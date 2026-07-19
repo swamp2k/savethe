@@ -3,7 +3,7 @@ import { abilityPowerForRarity } from '../../shared/abilities';
 import { MIN_PLAYERS } from '../../shared/constants';
 import type { MinigameContext, MinigameOutcome } from '../minigames/contract';
 import { getMinigame, pickMinigame } from '../minigames/registry';
-import { braveReduction, greedyBonus, guardianReduction, luckyCharmBonus } from './abilities';
+import { activeEffectsView, braveReduction, greedyBonus, guardianReduction, luckyCharmBonus } from './abilities';
 import { pickCruelty, sacrificeCandidates } from './cruelty';
 import { makePlushie } from './plushies';
 
@@ -434,6 +434,12 @@ export function projectFor(state: GameState, viewerId: string, now = 0): GameVie
   const mpcVoteTally = tally(state.mpcVotes);
   const riskTally = { bank: 0, risk: 0 };
   for (const vote of Object.values(state.riskVotes)) riskTally[vote] += 1;
+  const activeEffects = activeEffectsView(
+    state.unbanked,
+    state.round + 1,
+    state.roundModifiers.difficultyBonus,
+    state.round,
+  );
   const players: PlayerView[] = [...state.players].sort((a, b) => a.seat - b.seat).map(({ playerId, nickname, connected, seat }) => ({ playerId, nickname, connected, seat }));
   return {
     code: state.code, phase: state.phase, round: state.round, difficulty: state.difficulty, machine: state.machine, youId: viewerId, hostId: state.hostId, players,
@@ -441,7 +447,7 @@ export function projectFor(state: GameState, viewerId: string, now = 0): GameVie
     fuse: rawFuse ? { remainingMs: Math.max(0, rawFuse.deadlineAt - now), totalMs: rawFuse.totalMs } : null,
     mpcId: state.mpcId, previousMpcId: state.previousMpcId, eligibleIds: state.phase === 'mpc_voting' ? eligibleCandidates(state) : [], mpcVoteTally, yourMpcVote: state.mpcVotes[viewerId] ?? null,
     currentPlushie: state.currentPlushie, unbanked: state.unbanked, trophies: state.trophies, namingPlayerId: state.namingPlayerId,
-    riskTally, yourRiskVote: state.riskVotes[viewerId] ?? null, cruelty: projectCruelty(state, viewerId),
+    riskTally, yourRiskVote: state.riskVotes[viewerId] ?? null, activeEffects, cruelty: projectCruelty(state, viewerId),
     lastChance: state.lastChance?.outcome === 'pending' ? { playerId: state.lastChance.playerId, attemptId: state.lastChance.attemptId, windowMs: state.lastChance.windowMs } : null,
     minigame: showMinigame && game ? { id: game.id, title: game.title, view: game.getStateForPlayer(state.minigameState, viewerId) } : null,
     outcome: state.outcome, runSummary: state.runSummary,
