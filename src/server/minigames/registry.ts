@@ -22,15 +22,15 @@ import { typingGame } from './typing';
  * doesn't get to declare its own popularity. Equal weights today; nothing
  * stops a future minigame from being tuned rarer or more common.
  */
-const SELECTABLE: readonly { game: Minigame; weight: number }[] = [
-  { game: reactionGame, weight: 1 },
-  { game: typingGame, weight: 1 },
-  { game: aimGame, weight: 1 },
-  { game: memoryGame, weight: 1 },
-  { game: tetrisGame, weight: 1 },
-  { game: platformerGame, weight: 1 },
+const SELECTABLE: readonly Minigame[] = [
+  reactionGame,
+  typingGame,
+  aimGame,
+  memoryGame,
+  tetrisGame,
+  platformerGame,
 ];
-const ALL: readonly Minigame[] = [debugGame, ...SELECTABLE.map((s) => s.game)];
+const ALL: readonly Minigame[] = [debugGame, ...SELECTABLE];
 
 const BY_ID = new Map<string, Minigame>(ALL.map((g) => [g.id, g]));
 
@@ -42,14 +42,20 @@ export function getMinigame(id: string): Minigame | undefined {
  *  `random() === 0` this always lands on the first entry regardless of
  *  weights (as long as it has positive weight) — several tests rely on that
  *  determinism to reach a specific minigame without mocking selection. */
-export function pickMinigame(random: () => number): Minigame {
-  const totalWeight = SELECTABLE.reduce((sum, s) => sum + s.weight, 0);
-  let r = random() * totalWeight;
-  for (const s of SELECTABLE) {
-    r -= s.weight;
-    if (r < 0) return s.game;
+export function selectableMinigameIds(): string[] {
+  return SELECTABLE.map((game) => game.id);
+}
+
+export function createMinigameBag(random: () => number, lastMinigameId: string | null): string[] {
+  const bag = selectableMinigameIds();
+  for (let i = bag.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [bag[i], bag[j]] = [bag[j], bag[i]];
   }
-  return SELECTABLE[SELECTABLE.length - 1].game; // floating-point fallback
+  if (bag.length > 1 && lastMinigameId !== null && bag[0] === lastMinigameId) {
+    [bag[0], bag[1]] = [bag[1], bag[0]];
+  }
+  return bag;
 }
 
 export function minigameCount(): number {

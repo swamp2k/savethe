@@ -1,8 +1,8 @@
 import type { CrueltyView, GameView, Machine, Phase, Plushie, PlayerView, RoundOutcome, RoundModifiers, RunSummary } from '../../shared/game';
 import { abilityPowerForRarity } from '../../shared/abilities';
 import { MIN_PLAYERS } from '../../shared/constants';
-import type { MinigameContext, MinigameOutcome } from '../minigames/contract';
-import { getMinigame, pickMinigame } from '../minigames/registry';
+import type { Minigame, MinigameContext, MinigameOutcome } from '../minigames/contract';
+import { createMinigameBag, getMinigame } from '../minigames/registry';
 import { activeEffectsView, braveReduction, greedyBonus, guardianReduction, luckyCharmBonus } from './abilities';
 import { pickCruelty, sacrificeCandidates } from './cruelty';
 import { makePlushie } from './plushies';
@@ -50,6 +50,8 @@ export interface GameState {
   cruelty: EngineCrueltyState | null;
   roundModifiers: RoundModifiers;
   activeMinigameId: string | null;
+  minigameBag: string[];
+  lastMinigameId: string | null;
   minigameState: unknown;
   outcome: RoundOutcome | null;
   lastChanceUsed: boolean;
@@ -94,7 +96,7 @@ export function initialGameState(): GameState {
     code: '', phase: 'lobby', players: [], hostId: null, runId: 0, round: 0, difficulty: 1, machine: 'press', deadline: null,
     previousMpcId: null, mpcId: null, mpcVotes: {}, currentPlushie: null, unbanked: [], trophies: [], namingPlayerId: null,
     riskVotes: {}, cruelty: null, roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false },
-    activeMinigameId: null, minigameState: null, outcome: null, lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null,
+    activeMinigameId: null, minigameBag: [], lastMinigameId: null, minigameState: null, outcome: null, lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null,
     runSummary: null,
   };
 }
@@ -115,6 +117,8 @@ export function normalizeGameState(raw: GameState): GameState {
     trophies: (state.trophies ?? []).map(normalizePlushie),
     outcome: state.outcome ? { ...state.outcome, plushie: normalizePlushie(state.outcome.plushie) } : null,
     namingPlayerId: state.namingPlayerId ?? null,
+    minigameBag: state.minigameBag ?? [],
+    lastMinigameId: state.lastMinigameId ?? null,
     lastChanceUsed: state.lastChanceUsed ?? false,
     lastChanceAttemptId: state.lastChanceAttemptId ?? 0,
     lastChance: state.lastChance ?? null,
@@ -199,12 +203,23 @@ function lowestSeat(state: GameState, eligible: string[]): string | null {
   return [...eligible].sort((a, b) => (seats.get(a) ?? Infinity) - (seats.get(b) ?? Infinity))[0] ?? null;
 }
 function enterMpcSelected(state: GameState, ctx: MinigameContext): GameState { return { ...state, phase: 'mpc_selected', deadline: ctx.now + DURATIONS.mpcSelected }; }
+function drawMinigame(state: GameState, ctx: MinigameContext): { game: Minigame; minigameBag: string[]; lastMinigameId: string } {
+  let bag = state.minigameBag.filter((id) => getMinigame(id) !== undefined);
+  while (true) {
+    if (bag.length === 0) bag = createMinigameBag(ctx.random, state.lastMinigameId);
+    const [id, ...remaining] = bag;
+    const game = id ? getMinigame(id) : undefined;
+    if (game) return { game, minigameBag: remaining, lastMinigameId: id };
+    bag = remaining;
+  }
+}
 function enterChallengeIntro(state: GameState, ctx: MinigameContext): GameState {
-  const game = pickMinigame(ctx.random);
   if (!state.mpcId) return state;
+  const draw = drawMinigame(state, ctx);
+  const game = draw.game;
   const supportIds = state.roundModifiers.disableSupport ? [] : connectedPlayers(state).map((player) => player.playerId).filter((id) => id !== state.mpcId);
   return {
-    ...state, phase: 'challenge_intro', activeMinigameId: game.id,
+    ...state, phase: 'challenge_intro', activeMinigameId: game.id, minigameBag: draw.minigameBag, lastMinigameId: draw.lastMinigameId,
     minigameState: game.createInitialState({ difficulty: state.difficulty, mpcId: state.mpcId, supportIds }, ctx),
     roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false }, deadline: ctx.now + DURATIONS.challengeIntro,
   };

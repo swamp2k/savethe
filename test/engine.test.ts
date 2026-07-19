@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DURATIONS,
   initialGameState,
+  normalizeGameState,
   projectFor,
   reduce,
   type EngineAction,
@@ -41,12 +42,12 @@ function started(n: number, now = 1000): GameState {
  *  deadline if one is open. `random` defaults to 0, which always lands on the
  *  first entry in the weighted selectable pool (the Reaction Test) — most of
  *  this file exercises that game specifically via its `mpc_ready` stage. */
-function toActive(state: GameState, minigameRandom = 0): GameState {
+function toActive(state: GameState, minigameId = 'reaction', minigameRandom = 0): GameState {
   let s = throughStakes(state);
   if (s.phase === 'mpc_voting') s = apply(s, { type: 'tick' }, s.deadline! + 1);
   // The minigame is picked on this specific transition (mpc_selected ->
   // challenge_intro); only this tick needs the non-default random.
-  if (s.phase === 'mpc_selected') s = apply(s, { type: 'tick' }, s.deadline! + 1, minigameRandom);
+  if (s.phase === 'mpc_selected') s = apply({ ...s, minigameBag: s.minigameBag.length > 0 ? s.minigameBag : [minigameId] }, { type: 'tick' }, s.deadline! + 1, minigameRandom);
   if (s.phase === 'challenge_intro') s = apply(s, { type: 'tick' }, s.deadline! + 1);
   expect(s.phase).toBe('challenge_active');
   return s;
@@ -243,7 +244,7 @@ describe('the three round outcomes', () => {
 
 describe('fuse projection (challenge time-pressure bar)', () => {
   it('projects the overall budget as a fuse for a budget-based minigame (aim)', () => {
-    const s = toActive(started(2), 0.42);
+    const s = toActive(started(2), 'aim');
     expect(s.activeMinigameId).toBe('aim');
     const view = projectFor(s, s.mpcId!, (s.minigameState as { deadlineForChallenge: number }).deadlineForChallenge - 7_000);
     expect(view.fuse).not.toBeNull();
@@ -254,7 +255,7 @@ describe('fuse projection (challenge time-pressure bar)', () => {
   });
 
   it('projects no fuse for a secret-timing minigame (reaction)', () => {
-    const s = toActive(started(2), 0);
+    const s = toActive(started(2));
     expect(s.activeMinigameId).toBe('reaction');
     expect(projectFor(s, s.mpcId!).fuse).toBeNull();
   });
@@ -266,10 +267,25 @@ describe('fuse projection (challenge time-pressure bar)', () => {
 });
 
 describe('minigame selection (M4 exit criteria: both minigames playable, no engine changes)', () => {
+  it('keeps a serialized bag through reconnect normalization and a new run', () => {
+    const restored = normalizeGameState(JSON.parse(JSON.stringify({
+      ...started(2),
+      minigameBag: ['typing', 'aim'],
+      lastMinigameId: 'reaction',
+    })) as GameState);
+    const active = toActive(restored);
+    expect(active.activeMinigameId).toBe('typing');
+    expect(active.minigameBag).toEqual(['aim']);
+
+    const nextRun = apply({ ...active, phase: 'run_complete', deadline: 0 }, { type: 'tick' }, 1);
+    expect(nextRun.minigameBag).toEqual(['aim']);
+    expect(nextRun.lastMinigameId).toBe('typing');
+  });
+
   it('can select and fully play the Typing Challenge through the exact same generic dispatch', () => {
     // Six equal-weight entries now (reaction, typing, aim, memory, tetris,
     // platformer); random=0.25 lands on the second one (typing).
-    let s = toActive(started(2), 0.25);
+    let s = toActive(started(2), 'typing');
     expect(s.activeMinigameId).toBe('typing');
 
     const mg = projectFor(s, s.mpcId!).minigame;
@@ -287,7 +303,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
   });
 
   it('a support word-burst contributes toward a Typing round exactly like any other minigame action', () => {
-    let s = toActive(started(3), 0.25);
+    let s = toActive(started(3), 'typing');
     expect(s.activeMinigameId).toBe('typing');
     const mpc = s.mpcId!;
     const supporter = ['p1', 'p2', 'p3'].find((id) => id !== mpc)!;
@@ -310,7 +326,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
   it('can select and fully play Aim Trainer through the exact same generic dispatch', () => {
     // Six equal-weight entries (reaction, typing, aim, memory, tetris,
     // platformer); random=0.42 lands on the third one (aim).
-    let s = toActive(started(2), 0.42);
+    let s = toActive(started(2), 'aim');
     expect(s.activeMinigameId).toBe('aim');
 
     const required = (projectFor(s, s.mpcId!).minigame!.view as { requiredHits: number }).requiredHits;
@@ -331,7 +347,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
   it('can select and fully play Memory through the exact same generic dispatch', () => {
     // Six equal-weight entries (reaction, typing, aim, memory, tetris,
     // platformer); random=0.58 lands on the fourth one (memory).
-    let s = toActive(started(2), 0.58);
+    let s = toActive(started(2), 'memory', 0.58);
     expect(s.activeMinigameId).toBe('memory');
 
     // Let the study phase's own deadline elapse to reach recall.
@@ -361,7 +377,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
   it('can select and play Block Fit through the exact same generic dispatch', () => {
     // Six equal-weight entries (reaction, typing, aim, memory, tetris,
     // platformer); random=0.75 lands on the fifth one (tetris).
-    let s = toActive(started(2), 0.75);
+    let s = toActive(started(2), 'tetris');
     expect(s.activeMinigameId).toBe('tetris');
 
     const before = projectFor(s, s.mpcId!).minigame!.view as { linesCleared: number };
@@ -379,7 +395,7 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
   it('can select and fully play Obstacle Run through the exact same generic dispatch', () => {
     // Six equal-weight entries (reaction, typing, aim, memory, tetris,
     // platformer); random=0.92 lands on the last one (platformer).
-    let s = toActive(started(2), 0.92);
+    let s = toActive(started(2), 'platformer', 0.92);
     expect(s.activeMinigameId).toBe('platformer');
 
     const required = (projectFor(s, s.mpcId!).minigame!.view as { requiredObstacles: number }).requiredObstacles;

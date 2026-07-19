@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getMinigame, minigameCount, pickMinigame } from '../src/server/minigames/registry';
+import { createMinigameBag, getMinigame, minigameCount, selectableMinigameIds } from '../src/server/minigames/registry';
 
 describe('minigame registry', () => {
   it('lists exactly the real (non-debug) minigames as selectable', () => {
@@ -17,19 +17,14 @@ describe('minigame registry', () => {
     expect(getMinigame('nonexistent')).toBeUndefined();
   });
 
-  it('never selects the debug scaffold in real play', () => {
-    for (let r = 0; r < 1; r += 0.05) {
-      expect(pickMinigame(() => r).id).not.toBe('debug');
-    }
+  it('creates a bag containing every selectable game exactly once', () => {
+    const bag = createMinigameBag(() => 0.42, null);
+    expect(bag).toHaveLength(minigameCount());
+    expect(new Set(bag)).toEqual(new Set(selectableMinigameIds()));
   });
 
-  it('random()=0 always lands on the first entry regardless of weights (tests rely on this)', () => {
-    expect(pickMinigame(() => 0).id).toBe('reaction');
-  });
-
-  it('covers the full weighted range across the pool', () => {
-    const seen = new Set<string>();
-    for (let r = 0; r < 1; r += 0.01) seen.add(pickMinigame(() => r).id);
-    expect(seen).toEqual(new Set(['reaction', 'typing', 'aim', 'memory', 'tetris', 'platformer']));
+  it('swaps the opening pair to avoid repeating a previous bag boundary', () => {
+    const bag = createMinigameBag(() => 0.99, 'reaction');
+    expect(bag[0]).not.toBe('reaction');
   });
 });
