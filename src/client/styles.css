@@ -1344,6 +1344,9 @@ h3,
 .spelling-word, .spelling-mask { margin: 0; text-align: center; font-family: var(--font-display); font-size: clamp(1.7rem, 7vw, 3rem); font-weight: 800; letter-spacing: 0.08em; word-break: break-word; }
 .spelling-mask { color: var(--accent-2); }
 .spelling-form, .spelling-support { display: grid; gap: 0.7rem; width: min(100%, 480px); text-align: center; }
+.needle-track { position: relative; width: min(100%, 560px); height: 6rem; border: 2px solid var(--bg-panel-edge); border-radius: var(--radius-small); background: var(--bg-inset); cursor: pointer; overflow: hidden; }
+.needle-zone { position: absolute; top: 1.2rem; bottom: 1.2rem; border-radius: 0.35rem; background: rgba(74, 222, 128, 0.35); }
+.needle-pointer { position: absolute; top: 50%; color: var(--accent-2); font-size: 2rem; transform: translate(-50%, -50%); text-shadow: 0 0 8px rgba(255, 210, 63, 0.8); }
 
 /* --- Tetris-like (Block Fit) --- */
 .tetris-grid {

@@ -299,6 +299,17 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     expect(s.outcome?.success).toBe(true);
   });
 
+  it('drives Stop the Needle through the generic minigame dispatch', () => {
+    let s = toActive(started(2), 'needle');
+    expect(s.activeMinigameId).toBe('needle');
+    for (let index = 0; index < 3; index += 1) {
+      const attemptId = (s.minigameState as { mpcAttempt: { attemptId: number } }).mpcAttempt.attemptId;
+      s = apply(s, { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'stop', attemptId, elapsedMs: 150 } }, s.deadline! - 1);
+    }
+    expect(s.phase).toBe('round_resolution');
+    expect(s.outcome?.success).toBe(true);
+  });
+
   it('can select and fully play the Typing Challenge through the exact same generic dispatch', () => {
     // Six equal-weight entries now (reaction, typing, aim, memory, tetris,
     // platformer); random=0.25 lands on the second one (typing).
