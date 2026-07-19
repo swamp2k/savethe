@@ -9,6 +9,7 @@ import { typingGame } from './typing';
 import { wireGame } from './wire';
 import { spellingGame } from './spelling';
 import { stopTheNeedleGame } from './needle';
+import { blindMazeGame } from './maze';
 
 /**
  * The minigame registry. Adding a minigame means adding it here and nowhere
@@ -35,6 +36,7 @@ const SELECTABLE: readonly Minigame[] = [
   wireGame,
   spellingGame,
   stopTheNeedleGame,
+  blindMazeGame,
 ];
 const ALL: readonly Minigame[] = [debugGame, ...SELECTABLE];
 

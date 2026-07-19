@@ -1347,6 +1347,14 @@ h3,
 .needle-track { position: relative; width: min(100%, 560px); height: 6rem; border: 2px solid var(--bg-panel-edge); border-radius: var(--radius-small); background: var(--bg-inset); cursor: pointer; overflow: hidden; }
 .needle-zone { position: absolute; top: 1.2rem; bottom: 1.2rem; border-radius: 0.35rem; background: rgba(74, 222, 128, 0.35); }
 .needle-pointer { position: absolute; top: 50%; color: var(--accent-2); font-size: 2rem; transform: translate(-50%, -50%); text-shadow: 0 0 8px rgba(255, 210, 63, 0.8); }
+.maze-grid { display: grid; gap: 2px; width: min(100%, 440px); padding: 0.5rem; border-radius: var(--radius-small); background: var(--bg-inset); }
+.maze-cell { aspect-ratio: 1; display: grid; place-items: center; min-width: 0; border-radius: 2px; font-size: clamp(0.8rem, 4vw, 1.5rem); }
+.maze-cell--wall { background: var(--bg-panel-edge); }
+.maze-cell--open { background: rgba(255, 255, 255, 0.1); }
+.maze-cell--player { background: rgba(255, 210, 63, 0.3); }
+.maze-cell--goal { background: rgba(74, 222, 128, 0.35); }
+.maze-controls { display: grid; justify-items: center; gap: 0.4rem; }
+.maze-controls > div { display: flex; gap: 0.4rem; }
 
 /* --- Tetris-like (Block Fit) --- */
 .tetris-grid {

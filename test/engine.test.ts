@@ -310,6 +310,28 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     expect(s.outcome?.success).toBe(true);
   });
 
+  it('drives Blind Maze through the generic minigame dispatch', () => {
+    let s = toActive(started(2), 'maze');
+    expect(s.activeMinigameId).toBe('maze');
+    const maze = s.minigameState as { grid: Array<Array<0 | 1>>; position: { x: number; y: number }; goal: { x: number; y: number } };
+    const queue = [{ ...maze.position, path: [] as Array<'up' | 'down' | 'left' | 'right'> }];
+    const seen = new Set([`${maze.position.x},${maze.position.y}`]);
+    const steps = [{ direction: 'up' as const, x: 0, y: -1 }, { direction: 'down' as const, x: 0, y: 1 }, { direction: 'left' as const, x: -1, y: 0 }, { direction: 'right' as const, x: 1, y: 0 }];
+    let path: Array<'up' | 'down' | 'left' | 'right'> = [];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (current.x === maze.goal.x && current.y === maze.goal.y) { path = current.path; break; }
+      for (const step of steps) {
+        const next = { x: current.x + step.x, y: current.y + step.y };
+        const key = `${next.x},${next.y}`;
+        if (maze.grid[next.y]?.[next.x] === 1 && !seen.has(key)) { seen.add(key); queue.push({ ...next, path: [...current.path, step.direction] }); }
+      }
+    }
+    for (const direction of path) s = apply(s, { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'move', direction } }, s.deadline! - 1);
+    expect(s.phase).toBe('round_resolution');
+    expect(s.outcome?.success).toBe(true);
+  });
+
   it('can select and fully play the Typing Challenge through the exact same generic dispatch', () => {
     // Six equal-weight entries now (reaction, typing, aim, memory, tetris,
     // platformer); random=0.25 lands on the second one (typing).
