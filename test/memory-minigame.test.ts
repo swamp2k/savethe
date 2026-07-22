@@ -22,13 +22,34 @@ function view(s: unknown, viewerId: string) {
     supportCompletions: number;
     alphabet: string[];
     sequence?: string[];
+    myStage?: string;
     mySequence?: string[];
     myIndex?: number;
+    myLength?: number;
+    myWrongAttempts?: number;
   };
 }
 
 const RIGHT = '🔴'; // SYMBOLS[0], what random=0 always produces
 const WRONG = '🟡'; // SYMBOLS[1], never what random=0 produces
+
+function advanceUntil(state: unknown, predicate: (state: unknown) => boolean): unknown {
+  let next = state;
+  for (let i = 0; i < 10 && !predicate(next); i++) {
+    const deadline = memoryGame.getNextDeadline(next);
+    if (deadline === null) break;
+    next = memoryGame.onDeadline(next, ctx(deadline));
+  }
+  return next;
+}
+
+function toMpcRecall(state: unknown): unknown {
+  return advanceUntil(state, (candidate) => view(candidate, 'mpc').stage === 'recall');
+}
+
+function toSupportRecall(state: unknown, playerId = 's1'): unknown {
+  return advanceUntil(state, (candidate) => view(candidate, playerId).myStage === 'recall');
+}
 
 describe('memory: action schema', () => {
   it('accepts a well-formed recall', () => {
@@ -48,8 +69,7 @@ describe('memory: study -> recall', () => {
     expect(view(s, 'mpc').stage).toBe('study');
     expect(view(s, 'mpc').sequence).toEqual([RIGHT, RIGHT, RIGHT, RIGHT]);
 
-    const deadline = memoryGame.getNextDeadline(s)!;
-    const recalling = memoryGame.onDeadline(s, ctx(deadline));
+    const recalling = toMpcRecall(s);
     expect(view(recalling, 'mpc').stage).toBe('recall');
     expect(view(recalling, 'mpc').sequence).toBeUndefined();
   });
@@ -64,9 +84,7 @@ describe('memory: study -> recall', () => {
 
 describe('memory: MPC recall', () => {
   function toRecall(): unknown {
-    const s = fresh();
-    const deadline = memoryGame.getNextDeadline(s)!;
-    return memoryGame.onDeadline(s, ctx(deadline));
+    return toMpcRecall(fresh());
   }
 
   it('recalling the full sequence in order succeeds', () => {
@@ -116,10 +134,15 @@ describe('memory: MPC recall', () => {
 });
 
 describe('memory: support', () => {
-  it('completing the support sequence lowers requiredCorrect and hands out a fresh one', () => {
-    const s = fresh();
+  it('shows a sequence briefly, hides it for recall, then completion lowers the MPC target', () => {
+    const study = fresh();
+    expect(view(study, 's1').myStage).toBe('study');
+    expect(view(study, 's1').mySequence).toEqual([RIGHT, RIGHT, RIGHT]);
+    const s = toSupportRecall(study, 's1');
+    expect(view(s, 's1').myStage).toBe('recall');
+    expect(view(s, 's1').mySequence).toBeUndefined();
     const before = view(s, 'mpc').requiredCorrect;
-    const supLen = view(s, 's1').mySequence!.length;
+    const supLen = view(s, 's1').myLength!;
     let sup = s;
     for (let i = 0; i < supLen; i++) {
       sup = memoryGame.handleSupportAction(sup, 's1', { kind: 'recall', symbol: RIGHT }, ctx(200 * (i + 1)));
@@ -128,26 +151,28 @@ describe('memory: support', () => {
     expect(view(sup, 'mpc').supportCompletions).toBe(1);
   });
 
-  it("a wrong support click resets only that player's own progress", () => {
-    const s = fresh();
+  it("a wrong support click resets only that player and makes them restudy", () => {
+    const s = toSupportRecall(fresh(), 's1');
     let sup = memoryGame.handleSupportAction(s, 's1', { kind: 'recall', symbol: RIGHT }, ctx(100));
     expect(view(sup, 's1').myIndex).toBe(1);
     sup = memoryGame.handleSupportAction(sup, 's1', { kind: 'recall', symbol: WRONG }, ctx(200));
     expect(view(sup, 's1').myIndex).toBe(0);
+    expect(view(sup, 's1').myStage).toBe('study');
+    expect(view(sup, 's1').mySequence).toEqual([RIGHT, RIGHT, RIGHT]);
+    expect(view(sup, 's1').myWrongAttempts).toBe(1);
     expect(view(sup, 'mpc').requiredCorrect).toBe(view(s, 'mpc').requiredCorrect); // unaffected
   });
 
   it('a support completion can win the round outright once the MPC is one hit away', () => {
     let s = fresh();
-    const deadline = memoryGame.getNextDeadline(s)!;
-    s = memoryGame.onDeadline(s, ctx(deadline)); // -> recall
+    s = toMpcRecall(s);
     const required = view(s, 'mpc').requiredCorrect;
     for (let i = 0; i < required - 1; i++) {
       s = memoryGame.handleMpcAction(s, { kind: 'recall', symbol: RIGHT }, ctx(0));
     }
     expect(view(s, 'mpc').recallIndex).toBe(required - 1);
 
-    const supLen = view(s, 's1').mySequence!.length;
+    const supLen = view(s, 's1').myLength!;
     for (let i = 0; i < supLen; i++) {
       s = memoryGame.handleSupportAction(s, 's1', { kind: 'recall', symbol: RIGHT }, ctx(50_000 + i));
     }
@@ -157,7 +182,8 @@ describe('memory: support', () => {
   it('never lowers requiredCorrect below the floor', () => {
     let s = fresh();
     for (let round = 0; round < 5; round++) {
-      const supLen = view(s, 's1').mySequence!.length;
+      s = toSupportRecall(s, 's1');
+      const supLen = view(s, 's1').myLength!;
       for (let i = 0; i < supLen; i++) {
         s = memoryGame.handleSupportAction(s, 's1', { kind: 'recall', symbol: RIGHT }, ctx(1000 * round + i));
       }
@@ -188,6 +214,12 @@ describe('memory: per-player projection', () => {
     const specProjected = memoryGame.getStateForPlayer(s, 'ghost') as Record<string, unknown>;
     expect(supProjected.sequence).toBeUndefined();
     expect(specProjected.sequence).toBeUndefined();
+  });
+
+  it("never projects a support player's sequence during their recall stage", () => {
+    const recalling = toSupportRecall(fresh(), 's1');
+    const projected = memoryGame.getStateForPlayer(recalling, 's1') as Record<string, unknown>;
+    expect(projected.mySequence).toBeUndefined();
   });
 
   it('does not expose internal timing fields to any viewer', () => {

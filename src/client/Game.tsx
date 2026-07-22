@@ -10,6 +10,7 @@ import { PlushieInspector } from './PlushieInspector';
 import { getMinigameUI } from './minigames/registry';
 import { playSound, useMuted } from './sound';
 import { VisualChoiceButton } from './VisualChoiceButton';
+import { DoomSpectacle } from './DoomSpectacle';
 
 const EMOTE_EMOJI: Record<EmoteKind, string> = { heart: '❤️', panic: '😱', tomato: '🍅' };
 
@@ -328,7 +329,7 @@ function MpcVoting({
       <Timer remainingMs={view.deadlineRemainingMs} />
       <h2 className="panel__title">Who do we trust?</h2>
       <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" machine={view.machine} />
-      <p className="hint center">Vote for the MPC — the challenge is revealed after.</p>
+      <p className="hint center">Only players still waiting for their turn are eligible.</p>
       <div className="vote-grid">
         {view.eligibleIds.map((id) => {
           const votes = view.mpcVoteTally[id] ?? 0;
@@ -355,10 +356,11 @@ function MpcVoting({
 function MpcSelected({ view, nameOf }: { view: GameView; nameOf: (id: string | null) => string }) {
   const you = view.mpcId === view.youId;
   return (
-    <div className="panel center-panel">
+    <div className="panel center-panel combined-intro">
       <Timer remainingMs={view.deadlineRemainingMs} />
-      <div className="big-reveal">{you ? 'You are the MPC!' : `${nameOf(view.mpcId)} is the MPC`}</div>
-      <p className="hint">{you ? 'The whole group is watching you.' : 'May the odds be ever in their favour.'}</p>
+      <div className="big-reveal">{you ? 'YOU ARE THE MPC' : `${nameOf(view.mpcId).toUpperCase()} IS THE MPC`}</div>
+      <div className="combined-intro__challenge">{view.minigame?.title?.toUpperCase() ?? 'CHALLENGE INCOMING'}</div>
+      <p className="hint">{you ? 'Get ready — the whole group is behind you.' : `Get ready to help ${nameOf(view.mpcId)}.`}</p>
       <PlushieShowcase plushie={view.currentPlushie} mood="😟" animation="idle" machine={view.machine} />
     </div>
   );
@@ -457,12 +459,7 @@ function Resolution({
       <div className={`big-reveal ${outcome.success ? 'good' : 'bad'}`}>
         {outcome.success ? 'SAVED!' : 'DOOMED'}
       </div>
-      <PlushieShowcase
-        plushie={outcome.plushie}
-        mood={outcome.success ? '😄' : MACHINES[view.machine].failEmoji}
-        animation={outcome.success ? 'dance' : 'gesture-negative'}
-        machine={view.machine}
-      />
+      <DoomSpectacle plushie={outcome.plushie} machine={view.machine} outcome={outcome.success ? 'success' : 'failure'} />
       <p className="hint center">{outcome.headline}</p>
       {outcome.savedBy && <p className="hint center">Rescued by {nameOf(outcome.savedBy)} 🦸</p>}
       {MinigameUI && <MinigameUI conn={conn} view={view} nameOf={nameOf} />}
@@ -479,10 +476,10 @@ function RiskVoting({ conn, view }: { conn: Connection; view: GameView }) {
       <Shelf label="Currently at risk" plushies={view.unbanked} danger empty="—" />
       <ActiveEffects effects={view.activeEffects} />
       <div className="actions__row">
-        <VisualChoiceButton className={`btn--bank ${view.yourRiskVote === 'bank' ? 'btn--chosen' : ''}`} icon="🔒 🏆" title="BANK" detail={`${totalValue(view.unbanked)}★ SAFE · ${view.riskTally.bank} votes`} onClick={() => { playSound('click'); conn.voteRisk('bank'); }} />
+        <VisualChoiceButton className={`btn--bank ${view.yourRiskVote === 'bank' ? 'btn--chosen' : ''}`} icon="🔒 🏆" title="BANK" detail={`END RUN · ${totalValue(view.unbanked)}★ PERMANENT · ${view.riskTally.bank} votes`} onClick={() => { playSound('click'); conn.voteRisk('bank'); }} />
         <VisualChoiceButton className={`btn--risk ${view.yourRiskVote === 'risk' ? 'btn--chosen' : ''}`} icon="🔥 🎲" title="RISK" detail={`${totalValue(view.unbanked)}★ AT RISK · ${view.riskTally.risk} votes`} onClick={() => { playSound('click'); conn.voteRisk('risk'); }} />
       </div>
-      <p className="hint center">Bank secures them forever but ends their active abilities. Risk keeps their abilities active — and keeps them in danger.</p>
+      <p className="hint center">BANK ends this run, moves these plushies to the permanent trophy shelf, then starts a new run at Round 1. RISK continues this run with everything still in danger.</p>
     </div>
   );
 }
@@ -524,16 +521,18 @@ function RunOver({ view }: { view: GameView }) {
   return (
     <div className="panel center-panel">
       <Timer remainingMs={view.deadlineRemainingMs} />
-      <div className={`big-reveal ${banked ? 'good' : 'bad'}`}>{banked ? 'Banked!' : 'Run over'}</div>
+      <div className={`big-reveal ${banked ? 'good' : 'bad'}`}>{banked ? 'BANKED!' : 'RUN OVER'}</div>
+      <div className="run-summary__event">{banked ? 'RUN COMPLETE' : 'THE CURRENT RUN HAS ENDED'}</div>
       {summary && summary.plushies.length > 0 ? <>
-        <p className="run-summary__count">{banked ? `${summary.plushies.length} plushies secured` : `${summary.plushies.length} plushies lost`}</p>
+        <p className="run-summary__count">{banked ? `${summary.plushies.length} PLUSHIES ARE NOW PERMANENTLY SAFE` : `${summary.plushies.length} PLUSHIES LOST FROM THIS RUN`}</p>
         <div className={`run-summary__value ${banked ? 'good' : 'bad'}`}>{total}★ {banked ? 'BANKED' : 'GONE'}</div>
         <p className="hint center">{summary.rounds} round(s) played.</p>
-      </> : <p className="hint center">Nothing was banked.</p>}
+      </> : <p className="hint center">No at-risk plushies were lost.</p>}
       {summary && summary.plushies.length > 0 && (
         <Shelf label={banked ? '🎉 Banked' : '💔 Lost'} plushies={summary.plushies} danger={!banked} big />
       )}
-      <p className="hint center">A fresh run starts in a moment…</p>
+      {!banked && <p className="run-summary__preserved">🏆 {view.trophies.length} permanently banked plushie{view.trophies.length === 1 ? '' : 's'} {view.trophies.length === 1 ? 'remains' : 'remain'} safe. {view.runSaveTokens === 0 ? 'Run Save was already used.' : ''}</p>}
+      <div className="new-run-callout"><strong>NEW RUN</strong><span>Your trophy shelf is safe. Starting again from Round 1.</span></div>
     </div>
   );
 }
@@ -545,10 +544,11 @@ function RunSaved({ view }: { view: GameView }) {
     <div className="panel center-panel run-saved">
       <Timer remainingMs={view.deadlineRemainingMs} />
       <div className="big-reveal good">RUN SAVED!</div>
+      <div className="run-summary__event">THE RUN CONTINUES</div>
       <p className="run-summary__value good">{value}★ STILL ALIVE</p>
-      {failed && <p className="hint center">{failed.name} was lost, but your collection survives.</p>}
+      {failed && <p className="hint center">{failed.name} was lost, but Run Save preserved every earlier rescue from this run.</p>}
       <Shelf label="😰 Still at risk" plushies={view.unbanked} danger empty="—" />
-      <p className="hint center">🛟 Run Save used. No saves remain.</p>
+      <p className="hint center">🛟 Run Save used. No saves remain. Your permanent trophy shelf was never at risk.</p>
     </div>
   );
 }

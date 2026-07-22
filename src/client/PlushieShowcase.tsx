@@ -16,6 +16,7 @@ export function PlushieShowcase({
   animation,
   machine,
   compact,
+  showMachine = true,
 }: {
   plushie: Plushie | null;
   mood: string;
@@ -23,6 +24,8 @@ export function PlushieShowcase({
   machine: Machine;
   /** Smaller viewer for busy screens (active minigames). */
   compact?: boolean;
+  /** A surrounding presentation layer may draw the machine itself. */
+  showMachine?: boolean;
 }) {
   const src = plushie ? modelFor(plushie.species) : undefined;
   const [viewerState, setViewerState] = useState<'loading' | 'ready' | 'failed'>('loading');
@@ -51,10 +54,11 @@ export function PlushieShowcase({
   }, [viewerState]);
 
   if (!plushie) return null;
-  if (!src || viewerState !== 'ready') return <PlushieStage plushie={plushie} mood={mood} machine={machine} />;
+  if (!src || viewerState !== 'ready') return <PlushieStage plushie={plushie} mood={mood} machine={machine} showMachine={showMachine} />;
 
   return (
     <div className={`showcase ${compact ? 'showcase--compact' : ''}`}>
+      {showMachine && <div className="showcase__machine" aria-hidden="true">{machine === 'press' ? '🏭' : '🚀'}</div>}
       <model-viewer
         ref={viewerRef}
         className="showcase__viewer"

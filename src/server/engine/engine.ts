@@ -40,6 +40,9 @@ export interface GameState {
   machine: Machine;
   deadline: number | null;
   previousMpcId: string | null;
+  /** Players who have already served in the current fairness cycle. This is
+   * intentionally run-independent: banking never buys somebody another turn. */
+  mpcCyclePlayerIds: string[];
   mpcId: string | null;
   mpcVotes: Record<string, string>;
   currentPlushie: Plushie | null;
@@ -75,16 +78,17 @@ export type EngineAction =
 
 export const DURATIONS = {
   mpcVote: 30_000,
-  mpcSelected: 3_000,
-  challengeIntro: 7_000,
-  resolution: 6_000,
+  mpcSelected: 3_500,
+  /** Kept for persisted rooms already in the retired split intro phase. */
+  challengeIntro: 3_500,
+  resolution: 4_500,
   plushieNaming: 10_000,
   riskVote: 30_000,
-  stakes: 6_000,
+  stakes: 2_500,
   cruelty: 20_000,
   sacrificeResolution: 4_000,
-  runSaved: 6_000,
-  runEnd: 8_000,
+  runSaved: 4_500,
+  runEnd: 6_000,
 } as const;
 
 const LAST_CHANCE_BASE_CHANCE = 0.35;
@@ -96,7 +100,7 @@ const LATENCY_TOLERANCE_MS = 150;
 export function initialGameState(): GameState {
   return {
     code: '', phase: 'lobby', players: [], hostId: null, runId: 0, round: 0, difficulty: 1, machine: 'press', deadline: null,
-    previousMpcId: null, mpcId: null, mpcVotes: {}, currentPlushie: null, unbanked: [], trophies: [], namingPlayerId: null,
+    previousMpcId: null, mpcCyclePlayerIds: [], mpcId: null, mpcVotes: {}, currentPlushie: null, unbanked: [], trophies: [], namingPlayerId: null,
     riskVotes: {}, cruelty: null, roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false },
     activeMinigameId: null, minigameBag: [], lastMinigameId: null, minigameState: null, outcome: null, lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSaveTokens: 1,
     runSummary: null,
@@ -125,6 +129,7 @@ export function normalizeGameState(raw: GameState): GameState {
     lastChanceAttemptId: state.lastChanceAttemptId ?? 0,
     lastChance: state.lastChance ?? null,
     runSaveTokens: state.runSaveTokens ?? 1,
+    mpcCyclePlayerIds: raw.mpcCyclePlayerIds ?? [...new Set([raw.previousMpcId, raw.mpcId].filter((id): id is string => Boolean(id)))],
   };
 }
 
@@ -146,8 +151,15 @@ export function reduce(state: GameState, action: EngineAction, ctx: MinigameCont
 function connectedPlayers(state: GameState): EnginePlayer[] { return state.players.filter((player) => player.connected); }
 function eligibleCandidates(state: GameState): string[] {
   const connected = connectedPlayers(state).map((player) => player.playerId);
-  const eligible = connected.filter((id) => id !== state.previousMpcId);
+  const served = new Set(state.mpcCyclePlayerIds);
+  const eligible = connected.filter((id) => !served.has(id));
   return eligible.length > 0 ? eligible : connected;
+}
+function markMpcServed(state: GameState, mpcId: string): string[] {
+  const connected = connectedPlayers(state).map((player) => player.playerId);
+  const served = new Set(state.mpcCyclePlayerIds);
+  const cycleComplete = connected.length > 0 && connected.every((id) => served.has(id));
+  return cycleComplete ? [mpcId] : [...state.mpcCyclePlayerIds.filter((id) => id !== mpcId), mpcId];
 }
 function reassignHost(state: GameState): string | null {
   if (state.hostId && state.players.some((player) => player.playerId === state.hostId)) return state.hostId;
@@ -175,7 +187,7 @@ function applyStart(state: GameState, byPlayerId: string, ctx: MinigameContext):
 function beginRun(state: GameState, ctx: MinigameContext): GameState {
   const next: GameState = {
     ...state, runId: state.runId + 1, round: 0, difficulty: 1, machine: ctx.random() < 0.5 ? 'press' : 'cannon',
-    unbanked: [], previousMpcId: null, mpcId: null, mpcVotes: {}, riskVotes: {}, namingPlayerId: null, cruelty: null,
+    unbanked: [], mpcId: null, mpcVotes: {}, riskVotes: {}, namingPlayerId: null, cruelty: null,
     roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false }, outcome: null,
     lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSaveTokens: 1, runSummary: null,
   };
@@ -193,8 +205,8 @@ function setupRound(state: GameState, ctx: MinigameContext): GameState {
 }
 function enterStakes(state: GameState, ctx: MinigameContext): GameState { return { ...state, phase: 'stakes', deadline: ctx.now + DURATIONS.stakes }; }
 function enterMpcVoting(state: GameState, ctx: MinigameContext): GameState {
-  if (state.roundModifiers.forcedMpcId && connectedPlayers(state).some((player) => player.playerId === state.roundModifiers.forcedMpcId)) return enterMpcSelected({ ...state, mpcId: state.roundModifiers.forcedMpcId, mpcVotes: {} }, ctx);
   const eligible = eligibleCandidates(state);
+  if (state.roundModifiers.forcedMpcId && eligible.includes(state.roundModifiers.forcedMpcId)) return enterMpcSelected({ ...state, mpcId: state.roundModifiers.forcedMpcId, mpcVotes: {} }, ctx);
   if (connectedPlayers(state).length <= 2 || eligible.length === 1) {
     const mpcId = lowestSeat(state, eligible);
     if (mpcId) return enterMpcSelected({ ...state, mpcId, mpcVotes: {} }, ctx);
@@ -205,7 +217,19 @@ function lowestSeat(state: GameState, eligible: string[]): string | null {
   const seats = new Map(state.players.map((player) => [player.playerId, player.seat]));
   return [...eligible].sort((a, b) => (seats.get(a) ?? Infinity) - (seats.get(b) ?? Infinity))[0] ?? null;
 }
-function enterMpcSelected(state: GameState, ctx: MinigameContext): GameState { return { ...state, phase: 'mpc_selected', deadline: ctx.now + DURATIONS.mpcSelected }; }
+function enterMpcSelected(state: GameState, ctx: MinigameContext): GameState {
+  if (!state.mpcId) return state;
+  const draw = drawMinigame(state, ctx);
+  return {
+    ...state,
+    phase: 'mpc_selected',
+    activeMinigameId: draw.game.id,
+    minigameBag: draw.minigameBag,
+    lastMinigameId: draw.lastMinigameId,
+    mpcCyclePlayerIds: markMpcServed(state, state.mpcId),
+    deadline: ctx.now + DURATIONS.mpcSelected,
+  };
+}
 function drawMinigame(state: GameState, ctx: MinigameContext): { game: Minigame; minigameBag: string[]; lastMinigameId: string } {
   let bag = state.minigameBag.filter((id) => getMinigame(id) !== undefined);
   while (true) {
@@ -216,22 +240,27 @@ function drawMinigame(state: GameState, ctx: MinigameContext): { game: Minigame;
     bag = remaining;
   }
 }
-function enterChallengeIntro(state: GameState, ctx: MinigameContext): GameState {
-  if (!state.mpcId) return state;
-  const draw = drawMinigame(state, ctx);
-  const game = draw.game;
-  const supportIds = state.roundModifiers.disableSupport ? [] : connectedPlayers(state).map((player) => player.playerId).filter((id) => id !== state.mpcId);
-  return {
-    ...state, phase: 'challenge_intro', activeMinigameId: game.id, minigameBag: draw.minigameBag, lastMinigameId: draw.lastMinigameId,
-    minigameState: game.createInitialState({ difficulty: state.difficulty, mpcId: state.mpcId, supportIds }, ctx),
-    roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false }, deadline: ctx.now + DURATIONS.challengeIntro,
-  };
-}
 function enterChallengeActive(state: GameState, ctx: MinigameContext): GameState {
-  const game = state.activeMinigameId ? getMinigame(state.activeMinigameId) : undefined;
-  if (!game) return state;
-  const minigameState = game.onStart(state.minigameState, ctx);
-  return { ...state, phase: 'challenge_active', minigameState, deadline: game.getNextDeadline(minigameState) };
+  if (!state.mpcId) return state;
+  let prepared = state;
+  let game = state.activeMinigameId ? getMinigame(state.activeMinigameId) : undefined;
+  // A room persisted in mpc_selected by an older deployment has not drawn its
+  // game yet. Draw here so the timing-flow migration cannot strand that room.
+  if (!game) {
+    const draw = drawMinigame(state, ctx);
+    game = draw.game;
+    prepared = { ...state, activeMinigameId: game.id, minigameBag: draw.minigameBag, lastMinigameId: draw.lastMinigameId };
+  }
+  const supportIds = prepared.roundModifiers.disableSupport ? [] : connectedPlayers(prepared).map((player) => player.playerId).filter((id) => id !== prepared.mpcId);
+  const initialState = prepared.minigameState ?? game.createInitialState({ difficulty: prepared.difficulty, mpcId: prepared.mpcId!, supportIds }, ctx);
+  const minigameState = game.onStart(initialState, ctx);
+  return {
+    ...prepared,
+    phase: 'challenge_active',
+    minigameState,
+    roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false },
+    deadline: game.getNextDeadline(minigameState),
+  };
 }
 
 function applyMpcVote(state: GameState, voterId: string, candidateId: string, ctx: MinigameContext): GameState {
@@ -419,7 +448,7 @@ function applyTick(state: GameState, ctx: MinigameContext): GameState {
   if (state.deadline === null || ctx.now < state.deadline) return state;
   switch (state.phase) {
     case 'mpc_voting': return resolveMpcVote(state, ctx);
-    case 'mpc_selected': return enterChallengeIntro(state, ctx);
+    case 'mpc_selected': return enterChallengeActive(state, ctx);
     case 'challenge_intro': return enterChallengeActive(state, ctx);
     case 'challenge_active': {
       const game = state.activeMinigameId ? getMinigame(state.activeMinigameId) : undefined;
@@ -460,7 +489,7 @@ function projectCruelty(state: GameState, viewerId: string): CrueltyView | null 
 
 export function projectFor(state: GameState, viewerId: string, now = 0): GameView {
   const game = state.activeMinigameId ? getMinigame(state.activeMinigameId) : undefined;
-  const showMinigame = game != null && (state.phase === 'challenge_intro' || state.phase === 'challenge_active' || state.phase === 'round_resolution');
+  const showMinigame = game != null && (state.phase === 'mpc_selected' || state.phase === 'challenge_intro' || state.phase === 'challenge_active' || state.phase === 'round_resolution');
   const hideDeadline = state.phase === 'challenge_active' && game != null && (game.isDeadlineHidden?.(state.minigameState) ?? false);
   const rawFuse = state.phase === 'challenge_active' && game != null ? game.getFuse?.(state.minigameState) ?? null : null;
   const tally = (votes: Record<string, string>): Record<string, number> => Object.values(votes).reduce<Record<string, number>>((counts, vote) => ({ ...counts, [vote]: (counts[vote] ?? 0) + 1 }), {});
@@ -483,7 +512,7 @@ export function projectFor(state: GameState, viewerId: string, now = 0): GameVie
     riskTally, yourRiskVote: state.riskVotes[viewerId] ?? null, activeEffects, cruelty: projectCruelty(state, viewerId),
     lastChance: state.lastChance?.outcome === 'pending' ? { playerId: state.lastChance.playerId, attemptId: state.lastChance.attemptId, windowMs: state.lastChance.windowMs } : null,
     runSaveTokens: state.runSaveTokens,
-    minigame: showMinigame && game ? { id: game.id, title: game.title, view: game.getStateForPlayer(state.minigameState, viewerId) } : null,
+    minigame: showMinigame && game ? { id: game.id, title: game.title, view: state.minigameState == null ? null : game.getStateForPlayer(state.minigameState, viewerId) } : null,
     outcome: state.outcome, runSummary: state.runSummary,
   };
 }

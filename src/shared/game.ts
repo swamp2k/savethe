@@ -121,7 +121,7 @@ export interface GameView {
   // MPC selection
   mpcId: string | null;
   previousMpcId: string | null;
-  /** Candidates eligible to be voted MPC this round. */
+  /** Candidates who have not yet served in the current MPC rotation. */
   eligibleIds: string[];
   /** Live tally: candidateId -> number of votes. */
   mpcVoteTally: Record<string, number>;

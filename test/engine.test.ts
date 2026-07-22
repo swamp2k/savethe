@@ -42,12 +42,12 @@ function started(n: number, now = 1000): GameState {
  *  deadline if one is open. `random` defaults to 0, which always lands on the
  *  first entry in the weighted selectable pool (the Reaction Test) — most of
  *  this file exercises that game specifically via its `mpc_ready` stage. */
-function toActive(state: GameState, minigameId = 'reaction', minigameRandom = 0): GameState {
+function toActive(state: GameState, minigameId: string | null = 'reaction', minigameRandom = 0): GameState {
   let s = throughStakes(state);
   if (s.phase === 'mpc_voting') s = apply(s, { type: 'tick' }, s.deadline! + 1);
-  // The minigame is picked on this specific transition (mpc_selected ->
-  // challenge_intro); only this tick needs the non-default random.
-  if (s.phase === 'mpc_selected') s = apply({ ...s, minigameBag: s.minigameBag.length > 0 ? s.minigameBag : [minigameId] }, { type: 'tick' }, s.deadline! + 1, minigameRandom);
+  // The combined MPC/challenge reveal has already drawn a game. Override the
+  // selected ID when a test needs a specific plugin, then one tick starts it.
+  if (s.phase === 'mpc_selected') s = apply(minigameId === null ? s : { ...s, activeMinigameId: minigameId }, { type: 'tick' }, s.deadline! + 1, minigameRandom);
   if (s.phase === 'challenge_intro') s = apply(s, { type: 'tick' }, s.deadline! + 1);
   expect(s.phase).toBe('challenge_active');
   return s;
@@ -139,6 +139,21 @@ describe('lobby & start', () => {
 });
 
 describe('MPC selection', () => {
+  it('migrates an older persisted room without losing previous or current MPC service', () => {
+    const legacy = JSON.parse(JSON.stringify({
+      ...started(2),
+      previousMpcId: 'p2',
+      activeMinigameId: null,
+      minigameState: null,
+    })) as Omit<GameState, 'mpcCyclePlayerIds'> & { mpcCyclePlayerIds?: string[] };
+    delete legacy.mpcCyclePlayerIds;
+    const restored = normalizeGameState(legacy as GameState);
+    expect(restored.mpcCyclePlayerIds).toEqual(['p2', 'p1']);
+    const active = apply(restored, { type: 'tick' }, restored.deadline! + 1);
+    expect(active.phase).toBe('challenge_active');
+    expect(active.activeMinigameId).not.toBeNull();
+  });
+
   it('skips voting and alternates the MPC in a 2-player game', () => {
     let s = started(2);
     // Round 1: auto-selects the lowest seat.
@@ -160,7 +175,7 @@ describe('MPC selection', () => {
     expect(s.mpcId).toBe('p2');
   });
 
-  it('opens a real vote with 3+ players and excludes the previous MPC', () => {
+  it('opens a real vote with 3+ players and offers the unserved rotation pool', () => {
     const s = started(3);
     expect(s.phase).toBe('mpc_voting');
     expect(s.previousMpcId).toBeNull();
@@ -188,7 +203,7 @@ describe('MPC selection', () => {
     expect(s.mpcId).toBe('p3'); // only cast vote wins
   });
 
-  it('rejects votes for the excluded previous MPC', () => {
+  it('rejects votes for anyone already served in the current cycle', () => {
     // Round 2 of a 3-player game: p2 is the previous MPC.
     let s = started(3);
     s = apply(s, { type: 'mpcVote', voterId: 'p1', candidateId: 'p2' }, 100);
@@ -207,6 +222,67 @@ describe('MPC selection', () => {
     // A vote for the excluded previous MPC is ignored.
     s = apply(s, { type: 'mpcVote', voterId: 'p1', candidateId: 'p2' }, 7000);
     expect(projectFor(s, 'p1').mpcVoteTally.p2 ?? 0).toBe(0);
+  });
+
+  function voteFor(state: GameState, candidateId: string, now: number): GameState {
+    let next = state;
+    for (const player of next.players.filter((entry) => entry.connected)) {
+      next = apply(next, { type: 'mpcVote', voterId: player.playerId, candidateId }, now);
+    }
+    return next;
+  }
+
+  function openNextSelection(state: GameState, now: number): GameState {
+    return apply({ ...state, phase: 'stakes', deadline: now, mpcId: null, mpcVotes: {} }, { type: 'tick' }, now);
+  }
+
+  it('alternates two players across a full cycle', () => {
+    let s = started(2);
+    expect(s.mpcId).toBe('p1');
+    s = openNextSelection(s, 2_000);
+    expect(s.mpcId).toBe('p2');
+    s = openNextSelection(s, 3_000);
+    expect(s.mpcId).toBe('p1');
+  });
+
+  it('rotates all three players before a repeat', () => {
+    let s = voteFor(started(3), 'p2', 1_100);
+    expect(s.mpcCyclePlayerIds).toEqual(['p2']);
+    s = voteFor(openNextSelection(s, 2_000), 'p3', 2_100);
+    s = openNextSelection(s, 3_000);
+    expect(s.mpcId).toBe('p1');
+    expect(s.mpcCyclePlayerIds).toEqual(['p2', 'p3', 'p1']);
+    s = openNextSelection(s, 4_000);
+    expect(projectFor(s, 'p1').eligibleIds.sort()).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  it('rotates all four players before a repeat', () => {
+    let s = voteFor(started(4), 'p4', 1_100);
+    s = voteFor(openNextSelection(s, 2_000), 'p2', 2_100);
+    s = voteFor(openNextSelection(s, 3_000), 'p3', 3_100);
+    s = openNextSelection(s, 4_000);
+    expect(s.mpcId).toBe('p1');
+    expect(s.mpcCyclePlayerIds).toEqual(['p4', 'p2', 'p3', 'p1']);
+    s = openNextSelection(s, 5_000);
+    expect(projectFor(s, 'p1').eligibleIds.sort()).toEqual(['p1', 'p2', 'p3', 'p4']);
+  });
+
+  it('skips a disconnected unserved player, then includes them after reconnect', () => {
+    let s = voteFor(started(3), 'p1', 1_100);
+    const disconnected = makePlayers(3).map((player) => player.playerId === 'p2' ? { ...player, connected: false } : player);
+    s = apply(s, { type: 'syncPlayers', players: disconnected }, 1_500);
+    s = openNextSelection(s, 2_000);
+    expect(s.mpcId).toBe('p3');
+    s = apply(s, { type: 'syncPlayers', players: makePlayers(3) }, 2_500);
+    s = openNextSelection(s, 3_000);
+    expect(s.mpcId).toBe('p2');
+  });
+
+  it('adds a player who joins mid-cycle to the unserved pool', () => {
+    let s = voteFor(started(3), 'p1', 1_100);
+    s = apply(s, { type: 'syncPlayers', players: makePlayers(4) }, 1_500);
+    s = openNextSelection(s, 2_000);
+    expect(projectFor(s, 'p1').eligibleIds.sort()).toEqual(['p2', 'p3', 'p4']);
   });
 });
 
@@ -268,18 +344,25 @@ describe('fuse projection (challenge time-pressure bar)', () => {
 
 describe('minigame selection (M4 exit criteria: both minigames playable, no engine changes)', () => {
   it('keeps a serialized bag through reconnect normalization and a new run', () => {
-    const restored = normalizeGameState(JSON.parse(JSON.stringify({
-      ...started(2),
+    let seeded = apply(initialGameState(), { type: 'syncPlayers', players: makePlayers(2) }, 1_000);
+    seeded = {
+      ...seeded,
       minigameBag: ['typing', 'aim'],
       lastMinigameId: 'reaction',
-    })) as GameState);
-    const active = toActive(restored);
+    };
+    const restored = apply(
+      normalizeGameState(JSON.parse(JSON.stringify(seeded)) as GameState),
+      { type: 'start', byPlayerId: 'p1' },
+      1_000,
+    );
+    const active = toActive(restored, null);
     expect(active.activeMinigameId).toBe('typing');
     expect(active.minigameBag).toEqual(['aim']);
 
     const nextRun = apply({ ...active, phase: 'run_complete', deadline: 0 }, { type: 'tick' }, 1);
-    expect(nextRun.minigameBag).toEqual(['aim']);
-    expect(nextRun.lastMinigameId).toBe('typing');
+    expect(nextRun.activeMinigameId).toBe('aim');
+    expect(nextRun.minigameBag).toEqual([]);
+    expect(nextRun.lastMinigameId).toBe('aim');
   });
 
   it('drives Wire Panic through the generic minigame dispatch', () => {
@@ -400,13 +483,17 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     let s = toActive(started(2), 'memory', 0.58);
     expect(s.activeMinigameId).toBe('memory');
 
-    // Let the study phase's own deadline elapse to reach recall.
-    s = apply(s, { type: 'tick' }, s.deadline! + 1);
-    const mg = projectFor(s, s.mpcId!).minigame!.view as {
+    // Support study/hide has its own earlier alarm. Advance every due study
+    // beat until the MPC's longer study phase reaches recall.
+    let mg = projectFor(s, s.mpcId!).minigame!.view as {
       stage: string;
       requiredCorrect: number;
       alphabet: string[];
     };
+    while (mg.stage === 'study') {
+      s = apply(s, { type: 'tick' }, s.deadline! + 1);
+      mg = projectFor(s, s.mpcId!).minigame!.view as typeof mg;
+    }
     expect(mg.stage).toBe('recall');
 
     // random=0.58 deterministically picks the same alphabet entry for every
@@ -491,6 +578,8 @@ describe('bank / risk & the run', () => {
     expect(s.trophies).toHaveLength(1);
     expect(s.round).toBe(1);
     expect(['mpc_voting', 'mpc_selected']).toContain(s.phase);
+    expect(s.mpcId).toBe('p2');
+    expect(s.mpcCyclePlayerIds).toEqual(['p1', 'p2']);
   });
 
   it('risk continues the run and increases difficulty', () => {
@@ -620,8 +709,11 @@ describe('per-player projection', () => {
 });
 
 describe('durations are sane', () => {
-  it('gives players seven seconds to understand the challenge intro', () => {
-    expect(DURATIONS.challengeIntro).toBe(7_000);
+  it('compresses non-interactive transitions after the playtest', () => {
+    expect(DURATIONS.mpcSelected).toBe(3_500);
+    expect(DURATIONS.stakes).toBe(2_500);
+    expect(DURATIONS.resolution).toBe(4_500);
+    expect(DURATIONS.runEnd).toBe(6_000);
   });
 
   it('every timed phase has a positive duration', () => {

@@ -314,11 +314,12 @@ describe('GameRoom game flow', () => {
       await fresh.alarm();
     });
 
-    // The alarm should have advanced mpc_selected -> challenge_intro, and
+    // The alarm should have advanced the combined MPC/challenge reveal
+    // directly into active play, and
     // the still-connected socket (bound to the DO's state, not the evicted
     // JS instance) should have received the broadcast.
-    const view = await host.waitForPhase('challenge_intro');
-    expect(view.phase).toBe('challenge_intro');
+    const view = await host.waitForPhase('challenge_active');
+    expect(view.phase).toBe('challenge_active');
   });
 
   it('rejects a minigame action outside an active challenge', async () => {

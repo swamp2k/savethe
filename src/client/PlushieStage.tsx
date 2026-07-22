@@ -4,15 +4,17 @@ export function PlushieStage({
   plushie,
   mood,
   machine,
+  showMachine = true,
 }: {
   plushie: Plushie | null;
   mood: string;
   machine: Machine;
+  showMachine?: boolean;
 }) {
   if (!plushie) return null;
   return (
     <div className="stage">
-      <div className="stage__press">{MACHINES[machine].emoji}</div>
+      {showMachine && <div className="stage__press">{MACHINES[machine].emoji}</div>}
       <div className="stage__plushie">
         <span className="stage__emoji">{plushie.emoji}</span>
         <span className="stage__mood">{mood}</span>
