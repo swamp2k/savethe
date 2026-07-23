@@ -649,12 +649,17 @@ describe('stakes screen', () => {
 });
 
 describe('destruction machine', () => {
-  it('is chosen once at run start and stays stable across rounds', () => {
+  it('randomizes the first run, then alternates without repeating', () => {
     const s = apply(initialGameState(), { type: 'syncPlayers', players: makePlayers(2) }, 0);
     const press = apply(s, { type: 'start', byPlayerId: 'p1' }, 0, 0); // random=0 -> press
     expect(press.machine).toBe('press');
     const cannon = apply(s, { type: 'start', byPlayerId: 'p1' }, 0, 0.99); // random close to 1 -> cannon
     expect(cannon.machine).toBe('cannon');
+
+    const afterBank = apply({ ...press, phase: 'run_complete', deadline: 0 }, { type: 'tick' }, 1, 0);
+    expect(afterBank.machine).toBe('cannon');
+    const afterFailure = apply({ ...afterBank, phase: 'run_failed', deadline: 1 }, { type: 'tick' }, 2, 0.99);
+    expect(afterFailure.machine).toBe('press');
 
     let run = mpcSucceeds(toActive(press));
     run = throughNaming(run);
@@ -717,8 +722,23 @@ describe('durations are sane', () => {
   it('compresses non-interactive transitions after the playtest', () => {
     expect(DURATIONS.mpcSelected).toBe(3_500);
     expect(DURATIONS.stakes).toBe(2_500);
-    expect(DURATIONS.resolution).toBe(4_500);
+    expect(DURATIONS.resolutionSuccess).toBe(4_500);
+    expect(DURATIONS.resolutionFailure).toBe(6_500);
     expect(DURATIONS.runEnd).toBe(6_000);
+  });
+
+  it('gives successful resolutions 4.5 seconds and failed resolutions 6.5 seconds', () => {
+    const actionAt = 10_000;
+    let success = toActive(started(2), 'debug');
+    success = apply(success, { type: 'minigameAction', playerId: success.mpcId!, payload: { kind: 'save' } }, actionAt);
+    expect(success.phase).toBe('round_resolution');
+    expect(success.deadline).toBe(actionAt + DURATIONS.resolutionSuccess);
+
+    let failure = toActive(started(2), 'debug');
+    const failureAt = failure.deadline! + 1;
+    failure = apply(failure, { type: 'tick' }, failureAt);
+    expect(failure.phase).toBe('round_resolution');
+    expect(failure.deadline).toBe(failureAt + DURATIONS.resolutionFailure);
   });
 
   it('every timed phase has a positive duration', () => {

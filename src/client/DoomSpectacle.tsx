@@ -9,7 +9,9 @@ export function DoomSpectacle({ plushie, machine, outcome }: { plushie: Plushie;
   return (
     <div className={`spectacle spectacle--${machine} spectacle--${outcome}`} role="img" aria-label={label}>
       <div className="spectacle__machine" aria-hidden="true">
-        {machine === 'press' ? <><span className="spectacle__press-roof" /><span className="spectacle__press-ram" /><span className="spectacle__press-bed" /></> : <><span className="spectacle__cannon-barrel" /><span className="spectacle__cannon-wheel">⚙️</span><span className="spectacle__muzzle-flash">💥</span></>}
+        {machine === 'press'
+          ? <><span className="spectacle__press-roof" /><span className="spectacle__press-ram" /><span className="spectacle__press-bed" /></>
+          : <><span className="spectacle__cannon-barrel" /><span className="spectacle__cannon-wheel">⚙️</span><span className="spectacle__cannon-smoke">☁️</span><span className="spectacle__muzzle-flash">💥</span></>}
       </div>
       {!doomed && <div className="spectacle__rescue-line" aria-hidden="true">🪝</div>}
       <div className="spectacle__plushie">

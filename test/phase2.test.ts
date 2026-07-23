@@ -146,6 +146,7 @@ describe('Last Chance', () => {
     expect(state.phase).toBe('round_resolution');
     expect(state.outcome?.savedBy).toBe('p2');
     expect(state.unbanked).toHaveLength(1);
+    expect(state.deadline).toBe(1_201 + DURATIONS.resolutionSuccess);
     state = apply(state, { type: 'tick' }, state.deadline! + 1);
     expect(state.namingPlayerId).toBe('p2');
   });

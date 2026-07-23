@@ -81,7 +81,8 @@ export const DURATIONS = {
   mpcSelected: 3_500,
   /** Kept for persisted rooms already in the retired split intro phase. */
   challengeIntro: 3_500,
-  resolution: 4_500,
+  resolutionSuccess: 4_500,
+  resolutionFailure: 6_500,
   plushieNaming: 10_000,
   riskVote: 30_000,
   stakes: 2_500,
@@ -185,8 +186,11 @@ function applyStart(state: GameState, byPlayerId: string, ctx: MinigameContext):
   return beginRun(state, ctx);
 }
 function beginRun(state: GameState, ctx: MinigameContext): GameState {
+  const machine = state.runId === 0
+    ? ctx.random() < 0.5 ? 'press' : 'cannon'
+    : state.machine === 'press' ? 'cannon' : 'press';
   const next: GameState = {
-    ...state, runId: state.runId + 1, round: 0, difficulty: 1, machine: ctx.random() < 0.5 ? 'press' : 'cannon',
+    ...state, runId: state.runId + 1, round: 0, difficulty: 1, machine,
     unbanked: [], mpcId: null, mpcVotes: {}, riskVotes: {}, namingPlayerId: null, cruelty: null,
     roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false }, outcome: null,
     lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSaveTokens: 1, runSummary: null,
@@ -293,7 +297,8 @@ function enterResolution(state: GameState, minigameOutcome: MinigameOutcome & { 
   return {
     ...state, phase: 'round_resolution', outcome,
     unbanked: minigameOutcome.success && state.currentPlushie ? [...state.unbanked, state.currentPlushie] : state.unbanked,
-    previousMpcId: state.mpcId, deadline: ctx.now + DURATIONS.resolution,
+    previousMpcId: state.mpcId,
+    deadline: ctx.now + (minigameOutcome.success ? DURATIONS.resolutionSuccess : DURATIONS.resolutionFailure),
   };
 }
 
@@ -416,7 +421,7 @@ function applyLastChanceHit(state: GameState, playerId: string, attemptId: numbe
     ...state, phase: 'round_resolution', lastChance: null,
     unbanked: alreadySaved ? state.unbanked : [...state.unbanked, plushie],
     outcome: { ...state.outcome, success: true, savedBy: playerId, headline: `LAST CHANCE! ${playerName(state, playerId)} saved ${plushie.name}!` },
-    deadline: ctx.now + DURATIONS.resolution,
+    deadline: ctx.now + DURATIONS.resolutionSuccess,
   };
 }
 function playerName(state: GameState, playerId: string): string { return state.players.find((player) => player.playerId === playerId)?.nickname ?? 'Someone'; }
