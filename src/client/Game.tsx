@@ -422,9 +422,10 @@ function Challenge({
 }) {
   const MinigameUI = view.minigame ? getMinigameUI(view.minigame.id) : undefined;
   return (
-    <div className="panel center-panel">
+    <div className={`panel center-panel ${view.activeCurse === 'blur' ? 'curse-blur' : ''}`}>
       <Timer remainingMs={view.deadlineRemainingMs} />
       <Fuse fuse={view.fuse} />
+      {view.activeCurse === 'jumpscare' && <Jumpscare />}
       {MinigameUI ? (
         <MinigameUI conn={conn} view={view} nameOf={nameOf} />
       ) : (
@@ -479,9 +480,24 @@ function RiskVoting({ conn, view }: { conn: Connection; view: GameView }) {
         <VisualChoiceButton className={`btn--bank ${view.yourRiskVote === 'bank' ? 'btn--chosen' : ''}`} icon="🔒 🏆" title="BANK" detail={`END RUN · ${totalValue(view.unbanked)}★ PERMANENT · ${view.riskTally.bank} votes`} onClick={() => { playSound('click'); conn.voteRisk('bank'); }} />
         <VisualChoiceButton className={`btn--risk ${view.yourRiskVote === 'risk' ? 'btn--chosen' : ''}`} icon="🔥 🎲" title="RISK" detail={`${totalValue(view.unbanked)}★ AT RISK · ${view.riskTally.risk} votes`} onClick={() => { playSound('click'); conn.voteRisk('risk'); }} />
       </div>
+      <GambleButton conn={conn} view={view} />
       <p className="hint center">BANK ends this run, moves these plushies to the permanent trophy shelf, then starts a new run at Round 1. RISK continues this run with everything still in danger.</p>
     </div>
   );
+}
+
+function GambleButton({ conn, view }: { conn: Connection; view: GameView }) {
+  if (view.gambleResult !== null) return <p className="hint center">{view.gambleResult === 'reward' ? 'Reward: +1 Run Save!' : 'A curse will strike next round.'}</p>;
+  return <button className="btn btn--ghost" onClick={() => { playSound('click'); conn.gamble(); }}>TAKE THE 50/50 GAMBLE</button>;
+}
+
+function Jumpscare() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => { setVisible(true); playSound('failure'); }, 3_000 + Math.random() * 5_000);
+    return () => clearTimeout(timer);
+  }, []);
+  return visible ? <div className="jumpscare-overlay" role="alert">GHOST!<span>BOO!</span></div> : null;
 }
 
 function percent(value: number): string {

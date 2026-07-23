@@ -10,6 +10,9 @@ import { wireGame } from './wire';
 import { spellingGame } from './spelling';
 import { stopTheNeedleGame } from './needle';
 import { blindMazeGame } from './maze';
+import { targetPanicGame } from './target-panic';
+import { simonGame } from './simon';
+import { plushCatchGame } from './plush-catch';
 
 /**
  * The minigame registry. Adding a minigame means adding it here and nowhere
@@ -37,6 +40,9 @@ const SELECTABLE: readonly Minigame[] = [
   spellingGame,
   stopTheNeedleGame,
   blindMazeGame,
+  targetPanicGame,
+  simonGame,
+  plushCatchGame,
 ];
 const ALL: readonly Minigame[] = [debugGame, ...SELECTABLE];
 

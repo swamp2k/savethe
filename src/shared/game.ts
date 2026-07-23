@@ -71,6 +71,7 @@ export interface RunSummary {
 }
 
 export type CrueltyKind = 'the_deal' | 'nuts_or_teeth' | 'the_sacrifice';
+export type CurseType = 'jumpscare' | 'blur' | 'forced_sacrifice';
 export type CrueltyView =
   | { kind: 'the_deal'; chooserId: string; hostagePlushieId: string }
   | { kind: 'nuts_or_teeth'; chooserId: string }
@@ -141,6 +142,9 @@ export interface GameView {
   lastChance: LastChanceView | null;
   /** One automatic collection save is available at the beginning of every run. */
   runSaveTokens: number;
+  /** A pending curse is hidden until its next round activates. */
+  activeCurse: CurseType | null;
+  gambleResult: 'reward' | 'curse' | null;
 
   // Active challenge (per-player projection from the plugin)
   minigame: { id: string; title: string; view: unknown } | null;

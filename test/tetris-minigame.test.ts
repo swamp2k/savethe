@@ -145,6 +145,18 @@ describe('tetris: rotation', () => {
     expect(view(rotated, 'mpc').pieceCells).not.toEqual(before);
   });
 
+  it('cycles an L piece through all four valid orientations', () => {
+    // random=0.5 -> floor(0.5*4)=2 -> L.
+    let state = fresh(0.5);
+    const rotations: number[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      rotations.push((state as { activePiece: { rotation: number } }).activePiece.rotation);
+      state = tetrisGame.handleMpcAction(state, { kind: 'rotate' }, ctx(0, 0.5));
+    }
+    expect(rotations).toEqual([0, 1, 2, 3]);
+    expect((state as { activePiece: { rotation: number } }).activePiece.rotation).toBe(0);
+  });
+
   it("a single-rotation-state piece (O) is a harmless no-op", () => {
     const s = fresh(); // O-piece
     const before = view(s, 'mpc').pieceCells;

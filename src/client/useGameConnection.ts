@@ -44,6 +44,7 @@ export interface Connection {
   startGame: () => void;
   voteMpc: (candidateId: string) => void;
   voteRisk: (choice: 'bank' | 'risk') => void;
+  gamble: () => void;
   namePlushie: (name: string) => void;
   chooseCruelty: (choice: 'sacrifice' | 'harder' | 'nuts' | 'teeth') => void;
   voteSacrifice: (plushieId: string) => void;
@@ -277,6 +278,7 @@ export function useGameConnection(): Connection {
   const startGame = useCallback(() => send({ type: 'game.start' }), [send]);
   const voteMpc = useCallback((candidateId: string) => send({ type: 'mpc.vote', candidateId }), [send]);
   const voteRisk = useCallback((choice: 'bank' | 'risk') => send({ type: 'risk.vote', choice }), [send]);
+  const gamble = useCallback(() => send({ type: 'gamble.take' }), [send]);
   const namePlushie = useCallback((name: string) => send({ type: 'plushie.name', name }), [send]);
   const chooseCruelty = useCallback((choice: 'sacrifice' | 'harder' | 'nuts' | 'teeth') => send({ type: 'cruelty.choose', choice }), [send]);
   const voteSacrifice = useCallback((plushieId: string) => send({ type: 'cruelty.sacrifice_vote', plushieId }), [send]);
@@ -312,6 +314,7 @@ export function useGameConnection(): Connection {
     startGame,
     voteMpc,
     voteRisk,
+    gamble,
     namePlushie,
     chooseCruelty,
     voteSacrifice,

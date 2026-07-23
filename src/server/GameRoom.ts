@@ -129,6 +129,8 @@ export class GameRoom extends DurableObject<Env> {
         return this.dispatch({ type: 'mpcVote', voterId: playerId, candidateId: msg.candidateId });
       case 'risk.vote':
         return this.dispatch({ type: 'riskVote', voterId: playerId, choice: msg.choice });
+      case 'gamble.take':
+        return this.dispatch({ type: 'gamble', playerId });
       case 'plushie.name':
         return this.dispatch({ type: 'namePlushie', playerId, name: msg.name });
       case 'cruelty.choose':
@@ -183,9 +185,12 @@ export class GameRoom extends DurableObject<Env> {
     while (state.deadline !== null && now >= state.deadline) {
       const before = state;
       state = reduce(state, { type: 'tick' }, this.now());
-      if (state === before) break;
+      if (state === before) {
+        console.error('game_room_alarm_stalled', this.diagnosticSnapshot(state, 'tick_returned_same_state'));
+        break;
+      }
     }
-    await this.commit(state);
+    await this.commit(state, 'alarm');
   }
 
   // --- Handshake --------------------------------------------------------------
@@ -324,15 +329,36 @@ export class GameRoom extends DurableObject<Env> {
 
   private async dispatch(action: EngineAction): Promise<void> {
     const state = reduce(this.loadState(), action, this.now());
-    await this.commit(state);
+    await this.commit(state, action.type);
   }
 
   // --- Commit: persist, broadcast, reschedule ---------------------------------
 
-  private async commit(state: GameState): Promise<void> {
+  private async commit(state: GameState, reason = 'sync'): Promise<void> {
+    const previous = this.loadState();
+    if (previous.phase !== state.phase || previous.activeMinigameId !== state.activeMinigameId) {
+      console.info('game_room_transition', this.diagnosticSnapshot(state, reason, previous));
+    }
     this.saveState(state);
     this.broadcast(state);
     await this.scheduleAlarm(state);
+  }
+
+  /** Sparse, structured incident evidence: emitted only for phase/game changes
+   * and exceptional alarm conditions, never for ordinary minigame input. */
+  private diagnosticSnapshot(state: GameState, reason: string, previous?: GameState): Record<string, unknown> {
+    return {
+      code: state.code,
+      runId: state.runId,
+      round: state.round,
+      phase: state.phase,
+      previousPhase: previous?.phase,
+      minigameId: state.activeMinigameId,
+      previousMinigameId: previous?.activeMinigameId,
+      deadline: state.deadline,
+      reason,
+      players: state.players.map((player) => ({ id: player.playerId, connected: player.connected })),
+    };
   }
 
   private broadcast(state: GameState): void {

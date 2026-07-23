@@ -45,6 +45,7 @@ export const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('game.start') }),
   z.object({ type: z.literal('mpc.vote'), candidateId: z.string().min(1).max(200) }),
   z.object({ type: z.literal('risk.vote'), choice: z.enum(['bank', 'risk']) }),
+  z.object({ type: z.literal('gamble.take') }),
   z.object({ type: z.literal('cruelty.choose'), choice: z.enum(['sacrifice', 'harder', 'nuts', 'teeth']) }),
   z.object({ type: z.literal('cruelty.sacrifice_vote'), plushieId: z.string().min(1).max(200) }),
   z.object({ type: z.literal('plushie.name'), name: plushieName }),

@@ -745,3 +745,17 @@ describe('durations are sane', () => {
     for (const ms of Object.values(DURATIONS)) expect(ms).toBeGreaterThan(0);
   });
 });
+
+describe('expired challenge recovery', () => {
+  it('safely resolves a hibernated room whose retired minigame no longer exists', () => {
+    const active = toActive(started(2), 'debug');
+    const recovered = apply(
+      { ...active, activeMinigameId: 'retired-game', deadline: 10 },
+      { type: 'tick' },
+      10,
+    );
+    expect(recovered.phase).toBe('round_resolution');
+    expect(recovered.outcome).toMatchObject({ success: false, headline: expect.stringContaining('unavailable') });
+    expect(recovered.deadline).toBeGreaterThan(10);
+  });
+});

@@ -1,4 +1,4 @@
-import type { CrueltyView, GameView, Machine, Phase, Plushie, PlayerView, RoundOutcome, RoundModifiers, RunSummary } from '../../shared/game';
+import type { CrueltyView, CurseType, GameView, Machine, Phase, Plushie, PlayerView, RoundOutcome, RoundModifiers, RunSummary } from '../../shared/game';
 import { abilityPowerForRarity } from '../../shared/abilities';
 import { MIN_PLAYERS } from '../../shared/constants';
 import type { Minigame, MinigameContext, MinigameOutcome } from '../minigames/contract';
@@ -61,6 +61,9 @@ export interface GameState {
   lastChanceAttemptId: number;
   lastChance: LastChanceState | null;
   runSaveTokens: number;
+  pendingCurse: CurseType | null;
+  activeCurse: CurseType | null;
+  gambleResult: 'reward' | 'curse' | null;
   runSummary: RunSummary | null;
 }
 
@@ -69,6 +72,7 @@ export type EngineAction =
   | { type: 'start'; byPlayerId: string }
   | { type: 'mpcVote'; voterId: string; candidateId: string }
   | { type: 'riskVote'; voterId: string; choice: 'bank' | 'risk' }
+  | { type: 'gamble'; playerId: string }
   | { type: 'namePlushie'; playerId: string; name: string }
   | { type: 'lastChanceHit'; playerId: string; attemptId: number; elapsedMs: number }
   | { type: 'crueltyChoice'; playerId: string; choice: 'sacrifice' | 'harder' | 'nuts' | 'teeth' }
@@ -103,7 +107,7 @@ export function initialGameState(): GameState {
     code: '', phase: 'lobby', players: [], hostId: null, runId: 0, round: 0, difficulty: 1, machine: 'press', deadline: null,
     previousMpcId: null, mpcCyclePlayerIds: [], mpcId: null, mpcVotes: {}, currentPlushie: null, unbanked: [], trophies: [], namingPlayerId: null,
     riskVotes: {}, cruelty: null, roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false },
-    activeMinigameId: null, minigameBag: [], lastMinigameId: null, minigameState: null, outcome: null, lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSaveTokens: 1,
+    activeMinigameId: null, minigameBag: [], lastMinigameId: null, minigameState: null, outcome: null, lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSaveTokens: 1, pendingCurse: null, activeCurse: null, gambleResult: null,
     runSummary: null,
   };
 }
@@ -130,6 +134,9 @@ export function normalizeGameState(raw: GameState): GameState {
     lastChanceAttemptId: state.lastChanceAttemptId ?? 0,
     lastChance: state.lastChance ?? null,
     runSaveTokens: state.runSaveTokens ?? 1,
+    pendingCurse: state.pendingCurse ?? null,
+    activeCurse: state.activeCurse ?? null,
+    gambleResult: state.gambleResult ?? null,
     mpcCyclePlayerIds: raw.mpcCyclePlayerIds ?? [...new Set([raw.previousMpcId, raw.mpcId].filter((id): id is string => Boolean(id)))],
   };
 }
@@ -140,6 +147,7 @@ export function reduce(state: GameState, action: EngineAction, ctx: MinigameCont
     case 'start': return applyStart(state, action.byPlayerId, ctx);
     case 'mpcVote': return applyMpcVote(state, action.voterId, action.candidateId, ctx);
     case 'riskVote': return applyRiskVote(state, action.voterId, action.choice, ctx);
+    case 'gamble': return applyGamble(state, action.playerId, ctx);
     case 'namePlushie': return applyNamePlushie(state, action.playerId, action.name, ctx);
     case 'lastChanceHit': return applyLastChanceHit(state, action.playerId, action.attemptId, action.elapsedMs, ctx);
     case 'crueltyChoice': return applyCrueltyChoice(state, action.playerId, action.choice, ctx);
@@ -193,7 +201,7 @@ function beginRun(state: GameState, ctx: MinigameContext): GameState {
     ...state, runId: state.runId + 1, round: 0, difficulty: 1, machine,
     unbanked: [], mpcId: null, mpcVotes: {}, riskVotes: {}, namingPlayerId: null, cruelty: null,
     roundModifiers: { difficultyBonus: 0, forcedMpcId: null, disableSupport: false }, outcome: null,
-    lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSaveTokens: 1, runSummary: null,
+    lastChanceUsed: false, lastChanceAttemptId: 0, lastChance: null, runSaveTokens: 1, pendingCurse: null, activeCurse: null, gambleResult: null, runSummary: null,
   };
   return enterMpcVoting(setupRound(next, ctx), ctx);
 }
@@ -204,7 +212,7 @@ function setupRound(state: GameState, ctx: MinigameContext): GameState {
   return {
     ...state, round, difficulty: Math.max(1, baseDifficulty - braveReduction(state.unbanked)),
     currentPlushie: { ...plushie, value: plushie.value + greedyBonus(state.unbanked) }, mpcId: null, mpcVotes: {}, riskVotes: {},
-    namingPlayerId: null, outcome: null, activeMinigameId: null, minigameState: null, lastChance: null,
+    namingPlayerId: null, outcome: null, activeMinigameId: null, minigameState: null, lastChance: null, activeCurse: state.pendingCurse, pendingCurse: null,
   };
 }
 function enterStakes(state: GameState, ctx: MinigameContext): GameState { return { ...state, phase: 'stakes', deadline: ctx.now + DURATIONS.stakes }; }
@@ -323,12 +331,22 @@ function applyRiskVote(state: GameState, voterId: string, choice: 'bank' | 'risk
   const next = { ...state, riskVotes: { ...state.riskVotes, [voterId]: choice } };
   return allConnectedVoted(next.riskVotes, next) ? resolveRiskVote(next, ctx) : next;
 }
+function applyGamble(state: GameState, playerId: string, ctx: MinigameContext): GameState {
+  if (state.phase !== 'risk_voting' || state.gambleResult !== null || !connectedPlayers(state).some((player) => player.playerId === playerId)) return state;
+  if (ctx.random() < 0.5) return { ...state, gambleResult: 'reward', runSaveTokens: state.runSaveTokens + 1 };
+  const curses: CurseType[] = ['jumpscare', 'blur', 'forced_sacrifice'];
+  return { ...state, gambleResult: 'curse', pendingCurse: curses[Math.floor(ctx.random() * curses.length)] };
+}
 function resolveRiskVote(state: GameState, ctx: MinigameContext): GameState {
   const votes = Object.values(state.riskVotes);
   return votes.filter((choice) => choice === 'risk').length > votes.filter((choice) => choice === 'bank').length ? maybeEnterCruelty(state, ctx) : enterRunComplete(state, ctx);
 }
 
 function maybeEnterCruelty(state: GameState, ctx: MinigameContext): GameState {
+  if (state.pendingCurse === 'forced_sacrifice') {
+    const candidateIds = sacrificeCandidates(state.unbanked);
+    if (candidateIds) return { ...state, pendingCurse: null, phase: 'cruelty_event', cruelty: { kind: 'the_sacrifice', stage: 'voting', candidateIds, votes: {}, sacrificedPlushieId: null, sacrificedPlushie: null }, deadline: ctx.now + DURATIONS.cruelty };
+  }
   const baseChance = state.round >= 4 ? 0.65 : 0.25 + state.round * 0.1;
   const chance = Math.max(0.10, baseChance - guardianReduction(state.unbanked));
   if (ctx.random() <= 1 - chance) return enterStakes(setupRound(state, ctx), ctx);
@@ -432,13 +450,16 @@ function enterRunComplete(state: GameState, ctx: MinigameContext): GameState {
 }
 /** Resolves every terminal failure through the one-per-run collection save. */
 function finishFailedRun(state: GameState, ctx: MinigameContext): GameState {
+  // Jumpscares may ruin a moment, never the run. It is intentionally consumed
+  // here without using a Run Save token.
+  if (state.activeCurse === 'jumpscare') return enterRunSaved({ ...state, activeCurse: null }, ctx);
   return state.runSaveTokens > 0 && state.unbanked.length > 0 ? enterRunSaved(state, ctx) : enterRunFailed(state, ctx);
 }
 function enterRunSaved(state: GameState, ctx: MinigameContext): GameState {
   return {
     ...state,
     phase: 'run_saved',
-    runSaveTokens: state.runSaveTokens - 1,
+    runSaveTokens: Math.max(0, state.runSaveTokens - (state.activeCurse === 'jumpscare' ? 0 : 1)),
     namingPlayerId: null,
     lastChance: null,
     deadline: ctx.now + DURATIONS.runSaved,
@@ -457,11 +478,23 @@ function applyTick(state: GameState, ctx: MinigameContext): GameState {
     case 'challenge_intro': return enterChallengeActive(state, ctx);
     case 'challenge_active': {
       const game = state.activeMinigameId ? getMinigame(state.activeMinigameId) : undefined;
-      if (!game) return state;
+      // A deployed registry can retire a game while an older room is hibernated
+      // with it active. Never leave that persisted room in an un-wakeable phase.
+      if (!game) {
+        return enterResolution(state, { status: 'resolved', success: false, headline: 'Challenge unavailable after an update. The round was safely ended.' }, ctx);
+      }
       const minigameState = game.onDeadline(state.minigameState, ctx);
       const outcome = game.evaluate(minigameState, ctx);
       const advanced = { ...state, minigameState };
-      return outcome.status === 'resolved' ? enterResolution(advanced, outcome, ctx) : { ...advanced, deadline: game.getNextDeadline(minigameState) };
+      if (outcome.status === 'resolved') return enterResolution(advanced, outcome, ctx);
+      const deadline = game.getNextDeadline(minigameState);
+      // A plugin must either resolve on its deadline or schedule a strictly
+      // future one. Treat a broken/stale plugin state as a safe failed round
+      // instead of rearming an alarm in the past forever.
+      if (deadline === null || deadline <= ctx.now) {
+        return enterResolution(advanced, { status: 'resolved', success: false, headline: 'Challenge stalled at its deadline. The round was safely ended.' }, ctx);
+      }
+      return { ...advanced, deadline };
     }
     case 'round_resolution': return state.outcome?.success ? enterPlushieNaming(state, ctx) : maybeEnterLastChance(state, ctx);
     case 'plushie_naming': return enterRiskVoting({ ...state, namingPlayerId: null }, ctx);
@@ -517,6 +550,8 @@ export function projectFor(state: GameState, viewerId: string, now = 0): GameVie
     riskTally, yourRiskVote: state.riskVotes[viewerId] ?? null, activeEffects, cruelty: projectCruelty(state, viewerId),
     lastChance: state.lastChance?.outcome === 'pending' ? { playerId: state.lastChance.playerId, attemptId: state.lastChance.attemptId, windowMs: state.lastChance.windowMs } : null,
     runSaveTokens: state.runSaveTokens,
+    activeCurse: state.activeCurse,
+    gambleResult: state.gambleResult,
     minigame: showMinigame && game ? { id: game.id, title: game.title, view: state.minigameState == null ? null : game.getStateForPlayer(state.minigameState, viewerId) } : null,
     outcome: state.outcome, runSummary: state.runSummary,
   };

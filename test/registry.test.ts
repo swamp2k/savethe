@@ -3,7 +3,7 @@ import { createMinigameBag, getMinigame, minigameCount, selectableMinigameIds } 
 
 describe('minigame registry', () => {
   it('lists exactly the real (non-debug) minigames as selectable', () => {
-    expect(minigameCount()).toBe(10);
+    expect(minigameCount()).toBe(13);
   });
 
   it('resolves every registered id, including the excluded-from-selection debug game', () => {
@@ -18,6 +18,9 @@ describe('minigame registry', () => {
     expect(getMinigame('spelling')?.id).toBe('spelling');
     expect(getMinigame('needle')?.id).toBe('needle');
     expect(getMinigame('maze')?.id).toBe('maze');
+    expect(getMinigame('target_panic')?.id).toBe('target_panic');
+    expect(getMinigame('simon')?.id).toBe('simon');
+    expect(getMinigame('plush_catch')?.id).toBe('plush_catch');
     expect(getMinigame('nonexistent')).toBeUndefined();
   });
 

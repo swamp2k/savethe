@@ -56,7 +56,7 @@ export const ReactionMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) 
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        goAtRef.current = Date.now();
+        goAtRef.current = performance.now();
       });
     });
     return () => {
@@ -80,7 +80,7 @@ export const ReactionMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) 
     // Timing-critical: measure and dispatch before anything else (including
     // the click sound) touches the main thread, so audio setup can't inflate
     // the reported reaction time.
-    const elapsedMs = goAtRef.current !== null ? Date.now() - goAtRef.current : 0;
+    const elapsedMs = goAtRef.current !== null ? Math.round(performance.now() - goAtRef.current) : 0;
     conn.minigameAction({ kind: 'click', elapsedMs });
     playSound('click');
   };

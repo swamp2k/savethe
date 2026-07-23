@@ -10,6 +10,9 @@ import { WirePanicMinigameUI } from './WirePanicMinigameUI';
 import { SpellingPanicMinigameUI } from './SpellingPanicMinigameUI';
 import { StopTheNeedleMinigameUI } from './StopTheNeedleMinigameUI';
 import { BlindMazeMinigameUI } from './BlindMazeMinigameUI';
+import { TargetPanicMinigameUI } from './TargetPanicMinigameUI';
+import { SimonMinigameUI } from './SimonMinigameUI';
+import { PlushCatchMinigameUI } from './PlushCatchMinigameUI';
 
 /** Client counterpart to the server's minigame registry, keyed by the same id. */
 const REGISTRY: Record<string, MinigameUIComponent> = {
@@ -24,6 +27,9 @@ const REGISTRY: Record<string, MinigameUIComponent> = {
   spelling: SpellingPanicMinigameUI,
   needle: StopTheNeedleMinigameUI,
   maze: BlindMazeMinigameUI,
+  target_panic: TargetPanicMinigameUI,
+  simon: SimonMinigameUI,
+  plush_catch: PlushCatchMinigameUI,
 };
 
 export function getMinigameUI(id: string): MinigameUIComponent | undefined {

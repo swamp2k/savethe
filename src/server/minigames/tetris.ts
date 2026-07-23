@@ -62,6 +62,18 @@ const PIECE_SHAPES: Record<PieceType, number[][][]> = {
       [0, 2],
       [1, 0],
     ],
+    [
+      [0, 0],
+      [0, 1],
+      [1, 1],
+      [2, 1],
+    ],
+    [
+      [0, 2],
+      [1, 0],
+      [1, 1],
+      [1, 2],
+    ],
   ],
   T: [
     [
@@ -75,6 +87,18 @@ const PIECE_SHAPES: Record<PieceType, number[][][]> = {
       [1, 0],
       [2, 0],
       [1, 1],
+    ],
+    [
+      [0, 1],
+      [1, 0],
+      [1, 1],
+      [1, 2],
+    ],
+    [
+      [0, 1],
+      [1, 0],
+      [1, 1],
+      [2, 1],
     ],
   ],
 };
@@ -237,8 +261,15 @@ export const tetrisGame: Minigame = {
     if (a.kind === 'rotate') {
       const states = PIECE_SHAPES[s.activePiece.type];
       const rotation = (s.activePiece.rotation + 1) % states.length;
-      if (!canPlace(s.grid, states[rotation], s.activePiece.anchorRow, s.activePiece.anchorCol, s.rows, s.cols)) return s;
-      return { ...s, activePiece: { ...s.activePiece, rotation } };
+      // Small horizontal kicks keep an otherwise valid rotation usable at a
+      // wall without letting pieces pass through settled blocks.
+      for (const kick of [0, -1, 1, -2, 2]) {
+        const anchorCol = s.activePiece.anchorCol + kick;
+        if (canPlace(s.grid, states[rotation], s.activePiece.anchorRow, anchorCol, s.rows, s.cols)) {
+          return { ...s, activePiece: { ...s.activePiece, rotation, anchorCol } };
+        }
+      }
+      return s;
     }
 
     if (a.kind === 'drop') {
