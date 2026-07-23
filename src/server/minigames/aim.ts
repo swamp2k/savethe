@@ -6,9 +6,9 @@ import type { Minigame, MinigameConfig, MinigameContext, MinigameOutcome } from 
  * short, difficulty-scaled window; the MPC needs `requiredHits` successful
  * clicks within an overall time budget. Support players get their own
  * concurrent target — one that never expires, since support isn't meant to
- * be reaction-tested, just kept engaged — and every support hit lowers the
- * MPC's bar (floored so support can't trivialize it, and able to win the
- * round outright if it drops the bar to the MPC's current hit count).
+ * be reaction-tested, just kept engaged. Four support hits lower the MPC's
+ * bar by one, capped at two reductions, and a milestone hit can still win
+ * outright when it drops the bar to the MPC's current hit count.
  *
  * Deliberately reuses two already-proven mechanics instead of inventing a
  * third: the MPC side is Reaction Test's client-measured-elapsed-time +
@@ -58,9 +58,10 @@ const actionSchema = z.object({
 });
 type AimAction = z.infer<typeof actionSchema>;
 
-const BASE_REQUIRED_HITS = 6;
+const BASE_REQUIRED_HITS = 8;
 const REQUIRED_HITS_STEP = 1;
-const MAX_REQUIRED_HITS = 12;
+/** Preserve the original seven-step difficulty runway after raising the base. */
+const MAX_REQUIRED_HITS = 14;
 
 const BASE_TARGET_LIFETIME_MS = 1500;
 const TARGET_LIFETIME_STEP_MS = 60;
@@ -70,11 +71,12 @@ const TARGET_LIFETIME_STEP_MS = 60;
 const TARGET_LIFETIME_FLOOR_MS = 850;
 
 /** Fixed rather than difficulty-scaled: the two knobs above already carry
- *  the difficulty curve. Tight enough that the fuse visibly burns — 6 hits
- *  at ~1.2s target lifetimes fits comfortably, but there's no idle slack. */
+ *  the difficulty curve. The raised workload must fit without shortening
+ *  individual target lifetimes. */
 const TIME_BUDGET_MS = 22_000;
 
-const SUPPORT_REDUCTION_PER_HIT = 1;
+const SUPPORT_HITS_PER_REDUCTION = 4;
+const MAX_SUPPORT_REDUCTION = 2;
 const REQUIRED_HITS_FLOOR_RATIO = 0.4;
 const REQUIRED_HITS_FLOOR_MIN = 3;
 
@@ -102,6 +104,10 @@ function isPlausible(elapsedMs: number, spawnAt: number, now: number): boolean {
 
 function requiredHitsFloor(initialRequiredHits: number): number {
   return Math.max(REQUIRED_HITS_FLOOR_MIN, Math.ceil(initialRequiredHits * REQUIRED_HITS_FLOOR_RATIO));
+}
+
+function supportReductionForHits(supportHits: number): number {
+  return Math.min(MAX_SUPPORT_REDUCTION, Math.floor(supportHits / SUPPORT_HITS_PER_REDUCTION));
 }
 
 function asState(state: unknown): AimState {
@@ -222,10 +228,14 @@ export const aimGame: Minigame = {
     if (!isPlausible(a.elapsedMs, target.spawnAt, ctx.now)) return s;
 
     const supportHits = s.supportHits + 1;
-    const requiredHits = Math.max(requiredHitsFloor(s.initialRequiredHits), s.requiredHits - SUPPORT_REDUCTION_PER_HIT);
+    const supportReduction = supportReductionForHits(supportHits);
+    const requiredHits = Math.max(
+      requiredHitsFloor(s.initialRequiredHits),
+      s.initialRequiredHits - supportReduction,
+    );
     const spawned = spawnSupportTarget({ ...s, supportHits, requiredHits }, playerId, ctx);
     // The lowered bar may already be met by the MPC's existing hit count —
-    // a support hit can win the round outright, same as Typing Challenge.
+    // a milestone hit can win the round outright, same as Typing Challenge.
     return spawned.hits >= requiredHits ? { ...spawned, outcome: 'mpc_success' } : spawned;
   },
 
@@ -241,7 +251,10 @@ export const aimGame: Minigame = {
     const s = asState(state);
     switch (s.outcome) {
       case 'mpc_success': {
-        const assist = s.supportHits > 0 ? ` (${s.supportHits} team assist${s.supportHits === 1 ? '' : 's'})` : '';
+        const reduction = supportReductionForHits(s.supportHits);
+        const assist = s.supportHits > 0
+          ? ` (${s.supportHits} support hits, ${reduction} target${reduction === 1 ? '' : 's'} removed)`
+          : '';
         return { status: 'resolved', success: true, headline: `Bullseye! ${s.hits}/${s.requiredHits} hits${assist}.` };
       }
       case 'total_failure':
@@ -268,7 +281,7 @@ export const aimGame: Minigame = {
   },
 
   getFuse(state: unknown): { deadlineAt: number; totalMs: number } | null {
-    // The per-target expiry is hidden (see above), but the overall 20s
+    // The per-target expiry is hidden (see above), but the overall 22s
     // budget is stable and fair game for pressure.
     const s = asState(state);
     return s.outcome === 'pending' ? { deadlineAt: s.deadlineForChallenge, totalMs: s.timeBudgetMs } : null;
@@ -283,6 +296,9 @@ export const aimGame: Minigame = {
       requiredHits: s.requiredHits,
       misses: s.misses,
       supportHits: s.supportHits,
+      supportReduction: supportReductionForHits(s.supportHits),
+      supportHitsPerReduction: SUPPORT_HITS_PER_REDUCTION,
+      maxSupportReduction: MAX_SUPPORT_REDUCTION,
       hitThresholdMs: s.hitThresholdMs,
     };
     if (role === 'mpc') {

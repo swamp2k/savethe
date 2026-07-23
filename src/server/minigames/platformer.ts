@@ -14,11 +14,10 @@ import type { Minigame, MinigameConfig, MinigameContext, MinigameOutcome } from 
  * stays exactly as message-driven as every other minigame while still
  * feeling like a platformer's core tension (reflexes + the right call).
  *
- * A wrong response OR a too-slow-but-valid one ends the round immediately —
- * you got hit. Only one deadline ever exists at a time (the current
- * obstacle's own window), which also doubles as the safety net: there's no
- * separate overall time budget, because running out the clock on any single
- * obstacle already ends the round.
+ * The MPC starts with two lives. A wrong response or a too-slow-but-valid
+ * response costs one life and spawns the next obstacle; the second collision
+ * ends the round. Only one deadline exists at a time (the current obstacle's
+ * own window), so there is no separate overall time budget.
  *
  * Support gets their own single, non-expiring obstacle (no plausibility
  * check either — same "support is never itself deadline-bound" rule Aim
@@ -30,6 +29,11 @@ import type { Minigame, MinigameConfig, MinigameContext, MinigameOutcome } from 
  */
 
 type ObstacleType = 'jump' | 'duck';
+
+interface Obstacle {
+  id: number;
+  type: ObstacleType;
+}
 
 interface PlatformerState {
   mpcId: string;
@@ -47,13 +51,15 @@ interface PlatformerState {
   obstacleType: ObstacleType;
   obstacleSpawnAt: number;
   obstacleDeadlineAt: number;
-  supportObstacle: Record<string, ObstacleType>;
+  supportObstacle: Record<string, Obstacle>;
   supportClears: number;
+  livesRemaining: number;
   outcome: 'pending' | 'mpc_success' | 'hit_obstacle' | 'timeout';
 }
 
 const actionSchema = z.object({
   kind: z.literal('react'),
+  obstacleId: z.number().int().nonnegative(),
   response: z.enum(['jump', 'duck']),
   elapsedMs: z.number().int().min(0).max(10_000),
 });
@@ -62,6 +68,7 @@ type PlatformerAction = z.infer<typeof actionSchema>;
 const BASE_OBSTACLES = 5;
 const OBSTACLES_STEP = 1;
 const MAX_OBSTACLES = 10;
+const STARTING_LIVES = 2;
 
 // Choice-reaction scale, not pure-reflex scale: the MPC has to read WHICH
 // obstacle arrived (jump vs duck) and pick the matching button, which takes
@@ -107,6 +114,31 @@ function asState(state: unknown): PlatformerState {
   return state as PlatformerState;
 }
 
+function spawnMpcObstacle(
+  s: PlatformerState,
+  ctx: MinigameContext,
+  obstacleType = randomObstacleType(ctx.random),
+): PlatformerState {
+  return {
+    ...s,
+    obstacleId: s.nextObstacleId,
+    nextObstacleId: s.nextObstacleId + 1,
+    obstacleType,
+    obstacleSpawnAt: ctx.now,
+    obstacleDeadlineAt: ctx.now + s.obstacleWindowMs + DEADLINE_TRANSIT_BUFFER_MS,
+  };
+}
+
+function loseLife(
+  s: PlatformerState,
+  ctx: MinigameContext,
+  finalOutcome: 'hit_obstacle' | 'timeout',
+): PlatformerState {
+  const livesRemaining = s.livesRemaining - 1;
+  if (livesRemaining <= 0) return { ...s, livesRemaining: 0, outcome: finalOutcome };
+  return spawnMpcObstacle({ ...s, livesRemaining }, ctx);
+}
+
 export const platformerGame: Minigame = {
   id: 'platformer',
   title: 'Obstacle Run',
@@ -119,8 +151,11 @@ export const platformerGame: Minigame = {
     );
     const obstacleWindowMs = Math.max(MIN_WINDOW_MS, BASE_WINDOW_MS - (config.difficulty - 1) * WINDOW_STEP_MS);
 
-    const supportObstacle: Record<string, ObstacleType> = {};
-    for (const id of config.supportIds) supportObstacle[id] = randomObstacleType(ctx.random);
+    let nextObstacleId = 1;
+    const supportObstacle: Record<string, Obstacle> = {};
+    for (const id of config.supportIds) {
+      supportObstacle[id] = { id: nextObstacleId++, type: randomObstacleType(ctx.random) };
+    }
 
     return {
       mpcId: config.mpcId,
@@ -129,63 +164,52 @@ export const platformerGame: Minigame = {
       initialRequiredObstacles: requiredObstacles,
       obstacleWindowMs,
       obstaclesCleared: 0,
-      nextObstacleId: 1,
+      nextObstacleId,
       obstacleId: 0,
       obstacleType: randomObstacleType(ctx.random),
       obstacleSpawnAt: 0,
       obstacleDeadlineAt: 0,
       supportObstacle,
       supportClears: 0,
+      livesRemaining: STARTING_LIVES,
       outcome: 'pending',
     };
   },
 
   onStart(state: unknown, ctx: MinigameContext): PlatformerState {
     const s = asState(state);
-    return {
-      ...s,
-      obstacleId: s.nextObstacleId,
-      nextObstacleId: s.nextObstacleId + 1,
-      obstacleSpawnAt: ctx.now,
-      obstacleDeadlineAt: ctx.now + s.obstacleWindowMs + DEADLINE_TRANSIT_BUFFER_MS,
-    };
+    return spawnMpcObstacle(s, ctx, s.obstacleType);
   },
 
   handleMpcAction(state: unknown, action: unknown, ctx: MinigameContext): PlatformerState {
     const s = asState(state);
     if (s.outcome !== 'pending') return s;
     const a = action as PlatformerAction;
+    if (a.obstacleId !== s.obstacleId) return s;
     if (!isPlausible(a.elapsedMs, s.obstacleSpawnAt, ctx.now)) return s; // implausible claim, ignore
 
     if (a.response !== s.obstacleType) {
-      return { ...s, outcome: 'hit_obstacle' }; // wrong call: jumped when you should've ducked, or vice versa
+      return loseLife(s, ctx, 'hit_obstacle');
     }
     if (a.elapsedMs > s.obstacleWindowMs) {
-      return { ...s, outcome: 'hit_obstacle' }; // right call, too slow
+      return loseLife(s, ctx, 'hit_obstacle');
     }
 
     const obstaclesCleared = s.obstaclesCleared + 1;
     if (obstaclesCleared >= s.requiredObstacles) {
       return { ...s, obstaclesCleared, outcome: 'mpc_success' };
     }
-    return {
-      ...s,
-      obstaclesCleared,
-      obstacleId: s.nextObstacleId,
-      nextObstacleId: s.nextObstacleId + 1,
-      obstacleType: randomObstacleType(ctx.random),
-      obstacleSpawnAt: ctx.now,
-      obstacleDeadlineAt: ctx.now + s.obstacleWindowMs + DEADLINE_TRANSIT_BUFFER_MS,
-    };
+    return spawnMpcObstacle({ ...s, obstaclesCleared }, ctx);
   },
 
   handleSupportAction(state: unknown, playerId: string, action: unknown, ctx: MinigameContext): PlatformerState {
     const s = asState(state);
     if (s.outcome !== 'pending') return s;
-    const myType = s.supportObstacle[playerId];
-    if (myType === undefined) return s; // not a support player this round
+    const obstacle = s.supportObstacle[playerId];
+    if (obstacle === undefined) return s; // not a support player this round
     const a = action as PlatformerAction;
-    if (a.response !== myType) return s; // wrong call: free to try again, no penalty
+    if (a.obstacleId !== obstacle.id) return s;
+    if (a.response !== obstacle.type) return s; // wrong call: free to try again, no penalty
 
     const requiredObstacles = Math.max(
       requiredObstaclesFloor(s.initialRequiredObstacles),
@@ -193,7 +217,11 @@ export const platformerGame: Minigame = {
     );
     const next: PlatformerState = {
       ...s,
-      supportObstacle: { ...s.supportObstacle, [playerId]: randomObstacleType(ctx.random) },
+      nextObstacleId: s.nextObstacleId + 1,
+      supportObstacle: {
+        ...s.supportObstacle,
+        [playerId]: { id: s.nextObstacleId, type: randomObstacleType(ctx.random) },
+      },
       requiredObstacles,
       supportClears: s.supportClears + 1,
     };
@@ -204,7 +232,7 @@ export const platformerGame: Minigame = {
   onDeadline(state: unknown, ctx: MinigameContext): PlatformerState {
     const s = asState(state);
     if (s.outcome !== 'pending') return s;
-    if (ctx.now >= s.obstacleDeadlineAt) return { ...s, outcome: 'timeout' };
+    if (ctx.now >= s.obstacleDeadlineAt) return loseLife(s, ctx, 'timeout');
     return s;
   },
 
@@ -257,9 +285,14 @@ export const platformerGame: Minigame = {
       requiredObstacles: s.requiredObstacles,
       obstacleWindowMs: s.obstacleWindowMs,
       supportClears: s.supportClears,
+      livesRemaining: s.livesRemaining,
+      startingLives: STARTING_LIVES,
     };
     if (role === 'mpc') return { ...base, obstacleId: s.obstacleId, obstacleType: s.obstacleType };
-    if (role === 'support') return { ...base, myObstacleType: s.supportObstacle[viewerId] };
+    if (role === 'support') {
+      const obstacle = s.supportObstacle[viewerId];
+      return { ...base, myObstacleId: obstacle?.id, myObstacleType: obstacle?.type };
+    }
     return base;
   },
 };

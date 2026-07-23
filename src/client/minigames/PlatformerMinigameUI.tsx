@@ -13,7 +13,10 @@ interface PlatformerView {
   supportClears: number;
   obstacleId?: number;
   obstacleType?: 'jump' | 'duck';
+  myObstacleId?: number;
   myObstacleType?: 'jump' | 'duck';
+  livesRemaining: number;
+  startingLives: number;
 }
 
 const OBSTACLE_LABEL: Record<'jump' | 'duck', string> = { jump: 'JUMP!', duck: 'DUCK!' };
@@ -32,6 +35,17 @@ function Legend() {
 
 function ActionCue({ action }: { action: 'jump' | 'duck' }) {
   return <div className={`platformer-action-cue platformer-action-cue--${action}`}><span aria-hidden="true">{action === 'jump' ? '🧸 ⬆️ 🪨' : '🪵 ━━━ 🧸 ⬇️'}</span><strong>{OBSTACLE_LABEL[action]}</strong></div>;
+}
+
+function Lives({ remaining, total }: { remaining: number; total: number }) {
+  return (
+    <p className="platformer-lives" aria-label={`${remaining} of ${total} lives remaining`}>
+      {Array.from({ length: total }, (_, index) => (
+        <span key={index} aria-hidden="true">{index < remaining ? '❤️' : '♡'}</span>
+      ))}
+      <strong>{remaining} {remaining === 1 ? 'life' : 'lives'} left</strong>
+    </p>
+  );
 }
 
 /**
@@ -135,8 +149,10 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
   }
 
   const react = (response: 'jump' | 'duck') => {
-    const elapsedMs = spawnedAtRef.current !== null ? Date.now() - spawnedAtRef.current : 0;
-    conn.minigameAction({ kind: 'react', response, elapsedMs });
+    const currentObstacleId = mg.role === 'mpc' ? mg.obstacleId : mg.myObstacleId;
+    if (currentObstacleId === undefined) return;
+    const elapsedMs = mg.role === 'mpc' && spawnedAtRef.current !== null ? Date.now() - spawnedAtRef.current : 0;
+    conn.minigameAction({ kind: 'react', obstacleId: currentObstacleId, response, elapsedMs });
     setRunnerAction(response);
     playSound('click');
   };
@@ -165,6 +181,7 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
         <p className="typing-progress">
           {mg.obstaclesCleared} / {mg.requiredObstacles} cleared
         </p>
+        <Lives remaining={mg.livesRemaining} total={mg.startingLives} />
         <Legend />
         {mg.obstacleType && <ActionCue action={mg.obstacleType} />}
         {lane(
@@ -184,6 +201,7 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
     return (
       <>
         <PlushieShowcase plushie={view.currentPlushie} mood="😰" animation="idle" machine={view.machine} compact />
+        <Lives remaining={mg.livesRemaining} total={mg.startingLives} />
         <p className="hint">
           Clear your own obstacle to shorten {nameOf(view.mpcId)}&rsquo;s run! ({mg.supportClears} cleared)
         </p>
@@ -191,7 +209,7 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
         {mg.myObstacleType && <ActionCue action={mg.myObstacleType} />}
         {lane(
           mg.myObstacleType && (
-            <span className="platformer-obstacle platformer-obstacle--static">{OBSTACLE_EMOJI[mg.myObstacleType]}</span>
+            <span key={mg.myObstacleId} className="platformer-obstacle platformer-obstacle--static">{OBSTACLE_EMOJI[mg.myObstacleType]}</span>
           ),
         )}
         {buttons}
@@ -205,6 +223,7 @@ export const PlatformerMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }
       <p className="typing-progress">
         {mg.obstaclesCleared} / {mg.requiredObstacles} cleared
       </p>
+      <Lives remaining={mg.livesRemaining} total={mg.startingLives} />
       <p className="hint center">Watching {nameOf(view.mpcId)} run&hellip;</p>
     </>
   );

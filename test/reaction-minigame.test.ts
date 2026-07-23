@@ -135,25 +135,25 @@ describe('reaction test: MPC outcomes', () => {
     const hard = reactionGame.createInitialState({ ...config, difficulty: 10 }, ctx(0)) as { mpcThresholdMs: number };
     expect(easy.mpcThresholdMs).toBe(250);
     expect(hard.mpcThresholdMs).toBe(210); // floor
-    expect(view(easy, 'mpc').supportThresholdMs).toBe(350);
+    expect(view(easy, 'mpc').supportThresholdMs).toBe(300);
   });
 });
 
 describe('reaction test: flat latency compensation', () => {
-  it('credits the MPC 100ms, turning a raw miss into a stored/displayed success', () => {
+  it('credits the MPC 50ms, turning a raw miss into a stored/displayed success at the boundary', () => {
     const [s, signalAt] = toMpcGo(); // difficulty 1 -> threshold 250ms
     // Raw 300ms would fail against a 250ms threshold, but the compensated
-    // 200ms passes — and the compensated value is what gets stored/shown.
+    // 250ms passes — and the compensated value is what gets stored/shown.
     const clicked = reactionGame.handleMpcAction(s, { kind: 'click', elapsedMs: 300 }, ctx(signalAt + 300));
     expect(reactionGame.evaluate(clicked, ctx(0))).toMatchObject({ status: 'resolved', success: true });
-    expect(view(clicked, 'mpc').mpc).toMatchObject({ elapsedMs: 200, falseStart: false });
+    expect(view(clicked, 'mpc').mpc).toMatchObject({ elapsedMs: 250, falseStart: false });
   });
 
   it('still fails a claim that remains too slow after compensation', () => {
     const [s, signalAt] = toMpcGo();
     const clicked = reactionGame.handleMpcAction(s, { kind: 'click', elapsedMs: 900 }, ctx(signalAt + 900));
-    // 900 - 100 = 800, still well over the 250ms threshold.
-    expect(view(clicked, 'mpc').mpc).toMatchObject({ elapsedMs: 800 });
+    // 900 - 50 = 850, still well over the 250ms threshold.
+    expect(view(clicked, 'mpc').mpc).toMatchObject({ elapsedMs: 850 });
     expect(view(clicked, 'mpc').stage).toBe('support_waiting');
   });
 
@@ -168,7 +168,7 @@ describe('reaction test: flat latency compensation', () => {
   it('never produces a negative displayed value at the plausibility floor', () => {
     const [s, signalAt] = toMpcGo();
     const clicked = reactionGame.handleMpcAction(s, { kind: 'click', elapsedMs: 120 }, ctx(signalAt + 120));
-    expect(view(clicked, 'mpc').mpc).toMatchObject({ elapsedMs: 20 });
+    expect(view(clicked, 'mpc').mpc).toMatchObject({ elapsedMs: 70 });
   });
 });
 
@@ -189,10 +189,17 @@ describe('reaction test: support rescue', () => {
 
   it('applies the same flat compensation to a support rescue', () => {
     const [s, signalAt] = toSupportGo();
-    // Raw 400ms would miss the 350ms support threshold; compensated 300ms saves it.
-    const rescued = reactionGame.handleSupportAction(s, 's1', { kind: 'click', elapsedMs: 400 }, ctx(signalAt + 400));
+    // Raw 350ms would miss the 300ms support threshold; compensated 300ms saves it.
+    const rescued = reactionGame.handleSupportAction(s, 's1', { kind: 'click', elapsedMs: 350 }, ctx(signalAt + 350));
     expect(reactionGame.evaluate(rescued, ctx(0))).toMatchObject({ status: 'resolved', success: true, savedBy: 's1' });
     expect(view(rescued, 's1').supportResults.s1).toMatchObject({ elapsedMs: 300, falseStart: false });
+  });
+
+  it('rejects a support reaction just beyond the tightened compensated threshold', () => {
+    const [s, signalAt] = toSupportGo();
+    const missed = reactionGame.handleSupportAction(s, 's1', { kind: 'click', elapsedMs: 351 }, ctx(signalAt + 351));
+    expect(reactionGame.evaluate(missed, ctx(0))).toEqual({ status: 'active' });
+    expect(view(missed, 's1').supportResults.s1).toMatchObject({ elapsedMs: 301, falseStart: false });
   });
 
   it('first valid rescuer wins even if a second support player also beats the threshold', () => {

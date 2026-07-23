@@ -22,22 +22,44 @@ function view(s: unknown, viewerId: string) {
     supportClears: number;
     obstacleId?: number;
     obstacleType?: 'jump' | 'duck';
+    myObstacleId?: number;
     myObstacleType?: 'jump' | 'duck';
+    livesRemaining: number;
+    startingLives: number;
   };
 }
 
 const RIGHT: 'jump' | 'duck' = 'jump'; // what random=0 always produces
 const WRONG: 'jump' | 'duck' = 'duck';
 
+function mpcReact(s: unknown, response: 'jump' | 'duck', elapsedMs: number, now: number) {
+  return platformerGame.handleMpcAction(
+    s,
+    { kind: 'react', obstacleId: view(s, 'mpc').obstacleId, response, elapsedMs },
+    ctx(now),
+  );
+}
+
+function supportReact(s: unknown, playerId: 's1' | 's2', response: 'jump' | 'duck', now: number) {
+  return platformerGame.handleSupportAction(
+    s,
+    playerId,
+    { kind: 'react', obstacleId: view(s, playerId).myObstacleId, response, elapsedMs: 0 },
+    ctx(now),
+  );
+}
+
 describe('platformer: action schema', () => {
   it('accepts a well-formed react', () => {
-    expect(platformerGame.actionSchema.safeParse({ kind: 'react', response: 'jump', elapsedMs: 300 }).success).toBe(true);
+    expect(platformerGame.actionSchema.safeParse({ kind: 'react', obstacleId: 1, response: 'jump', elapsedMs: 300 }).success).toBe(true);
   });
 
   it('rejects malformed actions', () => {
-    expect(platformerGame.actionSchema.safeParse({ kind: 'react', response: 'fly', elapsedMs: 300 }).success).toBe(false);
-    expect(platformerGame.actionSchema.safeParse({ kind: 'react', response: 'jump' }).success).toBe(false);
-    expect(platformerGame.actionSchema.safeParse({ kind: 'react', response: 'jump', elapsedMs: -1 }).success).toBe(false);
+    expect(platformerGame.actionSchema.safeParse({ kind: 'react', obstacleId: 1, response: 'fly', elapsedMs: 300 }).success).toBe(false);
+    expect(platformerGame.actionSchema.safeParse({ kind: 'react', response: 'jump', elapsedMs: 300 }).success).toBe(false);
+    expect(platformerGame.actionSchema.safeParse({ kind: 'react', obstacleId: -1, response: 'jump', elapsedMs: 300 }).success).toBe(false);
+    expect(platformerGame.actionSchema.safeParse({ kind: 'react', obstacleId: 1, response: 'jump' }).success).toBe(false);
+    expect(platformerGame.actionSchema.safeParse({ kind: 'react', obstacleId: 1, response: 'jump', elapsedMs: -1 }).success).toBe(false);
     expect(platformerGame.actionSchema.safeParse({ kind: 'explode' }).success).toBe(false);
   });
 });
@@ -46,31 +68,80 @@ describe('platformer: MPC reactions', () => {
   it('a plausible, correct, fast-enough response clears the obstacle and spawns a new one', () => {
     const s = fresh();
     const v = view(s, 'mpc');
-    const cleared = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 200 }, ctx(200));
+    const cleared = mpcReact(s, RIGHT, 200, 200);
     const cv = view(cleared, 'mpc');
     expect(cv.obstaclesCleared).toBe(1);
     expect(cv.obstacleId).not.toBe(v.obstacleId);
+  });
+
+  it('ignores a stale previous obstacle id', () => {
+    const s = fresh();
+    const staleId = view(s, 'mpc').obstacleId;
+    const cleared = mpcReact(s, RIGHT, 200, 200);
+    const stale = platformerGame.handleMpcAction(
+      cleared,
+      { kind: 'react', obstacleId: staleId, response: WRONG, elapsedMs: 200 },
+      ctx(400),
+    );
+    expect(stale).toBe(cleared);
+  });
+
+  it('ignores a duplicate response to an already-cleared obstacle', () => {
+    const s = fresh();
+    const clearedId = view(s, 'mpc').obstacleId;
+    const cleared = mpcReact(s, RIGHT, 200, 200);
+    const duplicate = platformerGame.handleMpcAction(
+      cleared,
+      { kind: 'react', obstacleId: clearedId, response: RIGHT, elapsedMs: 200 },
+      ctx(400),
+    );
+    expect(duplicate).toBe(cleared);
+    expect(view(duplicate, 'mpc').obstaclesCleared).toBe(1);
+  });
+
+  it('ignores a delayed old action after an opposite-type next obstacle has spawned', () => {
+    const s = fresh();
+    const previous = view(s, 'mpc');
+    const cleared = platformerGame.handleMpcAction(
+      s,
+      { kind: 'react', obstacleId: previous.obstacleId, response: RIGHT, elapsedMs: 200 },
+      ctx(200, 1),
+    );
+    expect(view(cleared, 'mpc').obstacleType).toBe('duck');
+
+    const delayed = platformerGame.handleMpcAction(
+      cleared,
+      { kind: 'react', obstacleId: previous.obstacleId, response: RIGHT, elapsedMs: 200 },
+      ctx(400),
+    );
+    expect(delayed).toBe(cleared);
+    expect(view(delayed, 'mpc').livesRemaining).toBe(2);
   });
 
   it('reaching requiredObstacles resolves the round as a success', () => {
     let s = fresh();
     const required = view(s, 'mpc').requiredObstacles;
     for (let i = 0; i < required; i++) {
-      s = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 200 }, ctx(200 * (i + 1)));
+      s = mpcReact(s, RIGHT, 200, 200 * (i + 1));
     }
     expect(platformerGame.evaluate(s, ctx(0))).toMatchObject({ status: 'resolved', success: true });
   });
 
-  it('a wrong response fails the round immediately', () => {
+  it('a wrong response to the current obstacle consumes one life and the second fails', () => {
     const s = fresh();
-    const hit = platformerGame.handleMpcAction(s, { kind: 'react', response: WRONG, elapsedMs: 200 }, ctx(200));
-    expect(platformerGame.evaluate(hit, ctx(0))).toMatchObject({ status: 'resolved', success: false });
+    const firstHit = mpcReact(s, WRONG, 200, 200);
+    expect(view(firstHit, 'mpc').livesRemaining).toBe(1);
+    expect(platformerGame.evaluate(firstHit, ctx(0))).toEqual({ status: 'active' });
+
+    const secondHit = mpcReact(firstHit, WRONG, 200, 400);
+    expect(view(secondHit, 'mpc').livesRemaining).toBe(0);
+    expect(platformerGame.evaluate(secondHit, ctx(0))).toMatchObject({ status: 'resolved', success: false });
   });
 
   it('ignores an implausibly fast claimed response (below the human floor)', () => {
     const s = fresh();
     const v = view(s, 'mpc');
-    const reacted = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 50 }, ctx(50));
+    const reacted = mpcReact(s, RIGHT, 50, 50);
     expect(view(reacted, 'mpc').obstaclesCleared).toBe(0);
     expect(view(reacted, 'mpc').obstacleId).toBe(v.obstacleId); // unchanged; ignored
   });
@@ -78,15 +149,16 @@ describe('platformer: MPC reactions', () => {
   it('ignores a claim inconsistent with how quickly the message actually arrived', () => {
     const s = fresh();
     const v = view(s, 'mpc');
-    const reacted = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 900 }, ctx(50));
+    const reacted = mpcReact(s, RIGHT, 900, 50);
     expect(view(reacted, 'mpc').obstacleId).toBe(v.obstacleId); // unchanged; ignored
   });
 
-  it('a plausible but too-slow correct response still fails the round', () => {
+  it('a plausible but too-slow correct response consumes one life', () => {
     const s = fresh();
     // difficulty 1 -> obstacleWindowMs 1800; 2000ms is plausible but over the window.
-    const hit = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 2000 }, ctx(2000));
-    expect(platformerGame.evaluate(hit, ctx(0))).toMatchObject({ status: 'resolved', success: false });
+    const hit = mpcReact(s, RIGHT, 2000, 2000);
+    expect(view(hit, 'mpc').livesRemaining).toBe(1);
+    expect(platformerGame.evaluate(hit, ctx(0))).toEqual({ status: 'active' });
   });
 
   it('gives the server deadline transit slack beyond the player-facing window', () => {
@@ -99,15 +171,20 @@ describe('platformer: MPC reactions', () => {
     const early = platformerGame.onDeadline(s, ctx(windowMs + 1));
     expect(platformerGame.evaluate(early, ctx(0))).toEqual({ status: 'active' });
     // …and a correct in-window reaction arriving after transit delay still counts.
-    const late = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 1400 }, ctx(windowMs + 300));
+    const late = mpcReact(s, RIGHT, 1400, windowMs + 300);
     expect(view(late, 'mpc').obstaclesCleared).toBe(1);
   });
 
-  it('the obstacle window expiring fails the round', () => {
+  it('the first obstacle timeout costs a life and the second ends the round', () => {
     const s = fresh();
     const deadline = platformerGame.getNextDeadline(s)!;
-    const timedOut = platformerGame.onDeadline(s, ctx(deadline));
-    expect(platformerGame.evaluate(timedOut, ctx(0))).toMatchObject({ status: 'resolved', success: false });
+    const firstTimeout = platformerGame.onDeadline(s, ctx(deadline));
+    expect(view(firstTimeout, 'mpc').livesRemaining).toBe(1);
+    expect(platformerGame.evaluate(firstTimeout, ctx(0))).toEqual({ status: 'active' });
+    const secondDeadline = platformerGame.getNextDeadline(firstTimeout)!;
+    const secondTimeout = platformerGame.onDeadline(firstTimeout, ctx(secondDeadline));
+    expect(view(secondTimeout, 'mpc').livesRemaining).toBe(0);
+    expect(platformerGame.evaluate(secondTimeout, ctx(0))).toMatchObject({ status: 'resolved', success: false });
   });
 
   it('scales requiredObstacles up and obstacleWindowMs down with difficulty, both bounded', () => {
@@ -135,15 +212,17 @@ describe('platformer: support', () => {
   it('a correct support response immediately lowers requiredObstacles and hands out a fresh one', () => {
     const s = fresh();
     const before = view(s, 'mpc').requiredObstacles;
-    const cleared = platformerGame.handleSupportAction(s, 's1', { kind: 'react', response: RIGHT, elapsedMs: 0 }, ctx(0));
+    const previousId = view(s, 's1').myObstacleId;
+    const cleared = supportReact(s, 's1', RIGHT, 0);
     expect(view(cleared, 'mpc').requiredObstacles).toBe(before - 1);
     expect(view(cleared, 'mpc').supportClears).toBe(1);
+    expect(view(cleared, 's1').myObstacleId).not.toBe(previousId);
     expect(view(cleared, 's1').myObstacleType).toBeDefined();
   });
 
   it('a wrong support response is ignored, free to retry', () => {
     const s = fresh();
-    const clicked = platformerGame.handleSupportAction(s, 's1', { kind: 'react', response: WRONG, elapsedMs: 0 }, ctx(0));
+    const clicked = supportReact(s, 's1', WRONG, 0);
     expect(clicked).toBe(s);
   });
 
@@ -151,22 +230,17 @@ describe('platformer: support', () => {
     let s = fresh();
     const required = view(s, 'mpc').requiredObstacles;
     for (let i = 0; i < required - 1; i++) {
-      s = platformerGame.handleMpcAction(s, { kind: 'react', response: RIGHT, elapsedMs: 200 }, ctx(200 * (i + 1)));
+      s = mpcReact(s, RIGHT, 200, 200 * (i + 1));
     }
     expect(view(s, 'mpc').obstaclesCleared).toBe(required - 1);
-    const rescued = platformerGame.handleSupportAction(
-      s,
-      's1',
-      { kind: 'react', response: RIGHT, elapsedMs: 0 },
-      ctx(50_000),
-    );
+    const rescued = supportReact(s, 's1', RIGHT, 50_000);
     expect(platformerGame.evaluate(rescued, ctx(0))).toMatchObject({ status: 'resolved', success: true });
   });
 
   it('never lowers requiredObstacles below the floor', () => {
     let s = fresh();
     for (let i = 0; i < 10; i++) {
-      s = platformerGame.handleSupportAction(s, 's1', { kind: 'react', response: RIGHT, elapsedMs: 0 }, ctx(i));
+      s = supportReact(s, 's1', RIGHT, i);
     }
     // difficulty 1 -> initial requiredObstacles 5; floor = max(3, ceil(5 * 0.4)) = 3.
     expect(view(s, 'mpc').requiredObstacles).toBe(3);
@@ -178,7 +252,7 @@ describe('platformer: support', () => {
     const clicked = platformerGame.handleSupportAction(
       s,
       'ghost',
-      { kind: 'react', response: RIGHT, elapsedMs: 0 },
+      { kind: 'react', obstacleId: 1, response: RIGHT, elapsedMs: 0 },
       ctx(0),
     );
     expect(clicked).toBe(s);

@@ -20,6 +20,9 @@ function view(s: unknown, viewerId: string) {
     requiredHits: number;
     misses: number;
     supportHits: number;
+    supportReduction: number;
+    supportHitsPerReduction: number;
+    maxSupportReduction: number;
     hitThresholdMs: number;
     targetId?: number;
     targetX?: number;
@@ -111,9 +114,9 @@ describe('aim trainer: MPC hits', () => {
       requiredHits: number;
       hitThresholdMs: number;
     };
-    expect(easy.requiredHits).toBe(6);
+    expect(easy.requiredHits).toBe(8);
     expect(easy.hitThresholdMs).toBe(1500);
-    expect(hard.requiredHits).toBe(12); // capped
+    expect(hard.requiredHits).toBe(14); // capped
     expect(hard.hitThresholdMs).toBe(850); // floored
   });
 });
@@ -139,15 +142,40 @@ describe('aim trainer: expiry', () => {
 });
 
 describe('aim trainer: support', () => {
-  it('a support hit lowers requiredHits and spawns a fresh target for that player', () => {
-    const s = fresh();
-    const v = view(s, 's1');
-    const before = view(s, 'mpc').requiredHits;
-    const hit = aimGame.handleSupportAction(s, 's1', { kind: 'hit', targetId: v.targetId, elapsedMs: 200 }, ctx(200));
-    const after = view(hit, 'mpc');
-    expect(after.requiredHits).toBe(before - 1);
+  function supportHit(s: unknown, playerId: 's1' | 's2', now: number) {
+    const v = view(s, playerId);
+    return aimGame.handleSupportAction(
+      s,
+      playerId,
+      { kind: 'hit', targetId: v.targetId, elapsedMs: 200 },
+      ctx(now),
+    );
+  }
+
+  it('accumulates support hits and spawns a fresh target without one-for-one reduction', () => {
+    let s = fresh();
+    const firstTarget = view(s, 's1').targetId;
+    s = supportHit(s, 's1', 200);
+    const after = view(s, 'mpc');
+    expect(after.requiredHits).toBe(8);
     expect(after.supportHits).toBe(1);
-    expect(view(hit, 's1').targetId).not.toBe(v.targetId);
+    expect(after.supportReduction).toBe(0);
+    expect(view(s, 's1').targetId).not.toBe(firstTarget);
+  });
+
+  it('lowers the MPC requirement only after every four successful support hits', () => {
+    let s = fresh();
+    for (let i = 1; i <= 3; i++) {
+      s = supportHit(s, i % 2 === 0 ? 's2' : 's1', i * 200);
+      expect(view(s, 'mpc').requiredHits).toBe(8);
+    }
+    s = supportHit(s, 's2', 800);
+    expect(view(s, 'mpc')).toMatchObject({
+      supportHits: 4,
+      supportReduction: 1,
+      supportHitsPerReduction: 4,
+      requiredHits: 7,
+    });
   });
 
   it("support targets don't expire on their own — the MPC target's own expiry leaves them untouched", () => {
@@ -158,7 +186,7 @@ describe('aim trainer: support', () => {
     expect(view(afterExpiry, 's1').targetId).toBe(v.targetId);
   });
 
-  it('a support hit can win the round outright if the lowered bar meets the MPC\'s existing hits', () => {
+  it('a support milestone can win immediately when its lowered bar meets the MPC\'s existing hits', () => {
     let s = fresh();
     const required = view(s, 'mpc').requiredHits;
     for (let i = 0; i < required - 1; i++) {
@@ -167,25 +195,35 @@ describe('aim trainer: support', () => {
     }
     expect(view(s, 'mpc').hits).toBe(required - 1);
 
-    const sv = view(s, 's1');
-    const rescued = aimGame.handleSupportAction(
-      s,
-      's1',
-      { kind: 'hit', targetId: sv.targetId, elapsedMs: 200 },
-      ctx(50_000),
-    );
-    expect(aimGame.evaluate(rescued, ctx(0))).toMatchObject({ status: 'resolved', success: true });
+    for (let i = 1; i <= 3; i++) {
+      s = supportHit(s, 's1', 10_000 + i * 200);
+      expect(aimGame.evaluate(s, ctx(0))).toEqual({ status: 'active' });
+    }
+    s = supportHit(s, 's1', 10_800);
+    expect(view(s, 'mpc')).toMatchObject({ hits: 7, requiredHits: 7, supportReduction: 1 });
+    expect(aimGame.evaluate(s, ctx(0))).toMatchObject({ status: 'resolved', success: true });
   });
 
-  it('never lowers requiredHits below the floor', () => {
+  it('caps support reduction at two targets', () => {
     let s = fresh();
-    for (let i = 0; i < 10; i++) {
-      const v = view(s, 's1');
-      s = aimGame.handleSupportAction(s, 's1', { kind: 'hit', targetId: v.targetId, elapsedMs: 200 }, ctx(200 * (i + 1)));
+    for (let i = 1; i <= 12; i++) {
+      s = supportHit(s, 's1', i * 200);
     }
-    // difficulty 1 -> initial requiredHits 6; floor = max(3, ceil(6 * 0.4)) = 3.
-    expect(view(s, 'mpc').requiredHits).toBe(3);
-    expect(aimGame.evaluate(s, ctx(0))).toEqual({ status: 'active' }); // MPC still has 0 hits < 3
+    expect(view(s, 'mpc')).toMatchObject({
+      supportHits: 12,
+      supportReduction: 2,
+      maxSupportReduction: 2,
+      requiredHits: 6,
+    });
+  });
+
+  it('support cannot trivialize the challenge even after many successful hits', () => {
+    let s = fresh();
+    for (let i = 1; i <= 40; i++) {
+      s = supportHit(s, i % 2 === 0 ? 's2' : 's1', i * 200);
+    }
+    expect(view(s, 'mpc')).toMatchObject({ hits: 0, requiredHits: 6, supportReduction: 2 });
+    expect(aimGame.evaluate(s, ctx(0))).toEqual({ status: 'active' });
   });
 
   it('ignores an action from a player who is not on the support roster this round', () => {

@@ -60,7 +60,7 @@ function toActive(state: GameState, minigameId: string | null = 'reaction', mini
  * arrival-time plausibility check (arrivalDelta === elapsedMs exactly).
  * 150ms is comfortably under the MPC threshold at every difficulty this
  * suite reaches (round 1: 250ms, round 2: 240ms); 900ms is comfortably over;
- * 200ms is comfortably under the fixed 350ms support threshold.
+ * 200ms is comfortably under the fixed 300ms support threshold.
  */
 function mpcArmAndAwaitGo(s: GameState, readyAt: number): GameState {
   const armed = apply(s, { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'ready' } }, readyAt);
@@ -542,9 +542,14 @@ describe('minigame selection (M4 exit criteria: both minigames playable, no engi
     // start generating 'jump' obstacles instead after the first response).
     for (let i = 0; i < required; i++) {
       const spawnAt = s.deadline! - 1800; // difficulty 1 -> obstacleWindowMs 1800
+      const obstacleId = (projectFor(s, s.mpcId!).minigame!.view as { obstacleId: number }).obstacleId;
       s = apply(
         s,
-        { type: 'minigameAction', playerId: s.mpcId!, payload: { kind: 'react', response: 'duck', elapsedMs: 200 } },
+        {
+          type: 'minigameAction',
+          playerId: s.mpcId!,
+          payload: { kind: 'react', obstacleId, response: 'duck', elapsedMs: 200 },
+        },
         spawnAt + 200,
         0.92,
       );

@@ -9,6 +9,9 @@ interface AimView {
   requiredHits: number;
   misses: number;
   supportHits: number;
+  supportReduction: number;
+  supportHitsPerReduction: number;
+  maxSupportReduction: number;
   hitThresholdMs: number;
   targetId?: number;
   targetX?: number;
@@ -45,7 +48,9 @@ export const AimMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) => {
   if (!mg) return null;
 
   if (view.phase === 'round_resolution') {
-    const assist = mg.supportHits > 0 ? ` — ${mg.supportHits} team assist${mg.supportHits === 1 ? '' : 's'}` : '';
+    const assist = mg.supportHits > 0
+      ? ` — ${mg.supportHits} support hits removed ${mg.supportReduction} target${mg.supportReduction === 1 ? '' : 's'}`
+      : '';
     return (
       <p className="hint center">
         {mg.hits}/{mg.requiredHits} hits{assist}.
@@ -86,7 +91,10 @@ export const AimMinigameUI: MinigameUIComponent = ({ conn, view, nameOf }) => {
         </div>
         {mg.role === 'support' && (
           <p className="hint center">
-            Helping {nameOf(view.mpcId)} — {mg.supportHits} hit{mg.supportHits === 1 ? '' : 's'} so far
+            Helping {nameOf(view.mpcId)} —{' '}
+            {mg.supportReduction >= mg.maxSupportReduction
+              ? `${mg.supportHits} support hits · maximum ${mg.maxSupportReduction}-target reduction reached`
+              : `${mg.supportHits % mg.supportHitsPerReduction}/${mg.supportHitsPerReduction} hits toward the next -1 target · ${mg.supportReduction}/${mg.maxSupportReduction} removed`}
           </p>
         )}
       </>

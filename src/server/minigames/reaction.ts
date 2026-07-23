@@ -54,7 +54,7 @@ const MPC_THRESHOLD_STEP_MS = 10;
 // as physiologically impossible — unwinnable by design. Reaches the floor at
 // difficulty 5: 250, 240, 230, 220, 210.
 const MPC_THRESHOLD_FLOOR_MS = 210;
-const SUPPORT_THRESHOLD_MS = 350;
+const SUPPORT_THRESHOLD_MS = 300;
 
 const READY_TIMEOUT_MS = 12_000;
 const MIN_GO_DELAY_MS = 1_200;
@@ -79,7 +79,7 @@ const LATENCY_TOLERANCE_MS = 150;
  * gap rather than pretending it doesn't exist. Plausibility itself (the
  * checks above) is still validated against the raw, uncompensated claim.
  */
-const REACTION_LATENCY_COMPENSATION_MS = 100;
+const REACTION_LATENCY_COMPENSATION_MS = 50;
 
 function compensate(elapsedMs: number): number {
   return Math.max(0, elapsedMs - REACTION_LATENCY_COMPENSATION_MS);
